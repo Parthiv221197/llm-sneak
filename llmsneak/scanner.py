@@ -161,7 +161,7 @@ async def run_scan(cfg: ScanConfig) -> ScanResult:
         else:
             result.provider = ProviderResult(provider="unknown", api_format="openai")
 
-        api_format   = result.provider.api_format if result.provider else "openai"
+        api_format   = cfg.api_format_override or (result.provider.api_format if result.provider else "openai")
         provider_name = result.provider.provider   if result.provider else "unknown"
 
         # ── Phase 3: Model Fingerprinting ─────────────────────────────────────

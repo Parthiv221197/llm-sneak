@@ -10,14 +10,14 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://python.org)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![OWASP LLM Top 10](https://img.shields.io/badge/OWASP-LLM%20Top%2010-red.svg)](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
-[![GitHub Stars](https://img.shields.io/github/stars/safellm/llm-sneak?style=social)](https://github.com/safellm/llm-sneak)
+[![GitHub Stars](https://img.shields.io/github/stars/Parthiv221197/llm-sneak?style=social)](https://github.com/Parthiv221197/llm-sneak)
 
 ```
 $ llm-sneak -A --model llama3 http://localhost:11434
 ```
 
 ```
-Starting llm-sneak 0.1.0  ( https://github.com/safellm/llm-sneak )
+Starting llm-sneak 0.1.0  ( https://github.com/Parthiv221197/llm-sneak )
 
 Scan report for http://localhost:11434
 
@@ -95,7 +95,7 @@ pip install llm-sneak
 ### Option 2 — From source
 
 ```bash
-git clone https://github.com/safellm/llm-sneak.git
+git clone https://github.com/Parthiv221197/llm-sneak.git
 cd llm-sneak
 pip install .
 ```
@@ -103,7 +103,7 @@ pip install .
 ### Option 3 — Poetry
 
 ```bash
-git clone https://github.com/safellm/llm-sneak.git
+git clone https://github.com/Parthiv221197/llm-sneak.git
 cd llm-sneak
 poetry install
 poetry shell   # activate the venv
@@ -112,7 +112,7 @@ poetry shell   # activate the venv
 ### Option 4 — One-liner installer
 
 ```bash
-git clone https://github.com/safellm/llm-sneak.git
+git clone https://github.com/Parthiv221197/llm-sneak.git
 cd llm-sneak
 bash install.sh
 ```
@@ -420,7 +420,7 @@ llm-sneak/
 ## Development
 
 ```bash
-git clone https://github.com/safellm/llm-sneak.git
+git clone https://github.com/Parthiv221197/llm-sneak.git
 cd llm-sneak
 
 # Install with dev tools
@@ -491,9 +491,9 @@ See [SECURITY.md](SECURITY.md) for the responsible disclosure policy.
 
 **If llm-sneak is useful to you, please ⭐ star the repo — it helps others find it.**
 
-[Report a Bug](https://github.com/safellm/llm-sneak/issues/new?template=bug_report.md) ·
-[Request a Feature](https://github.com/safellm/llm-sneak/issues/new?template=feature_request.md) ·
-[Submit a Probe Pack](https://github.com/safellm/llm-sneak/issues/new?template=probe_pack.md) ·
-[Discussions](https://github.com/safellm/llm-sneak/discussions)
+[Report a Bug](https://github.com/Parthiv221197/llm-sneak/issues/new?template=bug_report.md) ·
+[Request a Feature](https://github.com/Parthiv221197/llm-sneak/issues/new?template=feature_request.md) ·
+[Submit a Probe Pack](https://github.com/Parthiv221197/llm-sneak/issues/new?template=probe_pack.md) ·
+[Discussions](https://github.com/Parthiv221197/llm-sneak/discussions)
 
 </div>

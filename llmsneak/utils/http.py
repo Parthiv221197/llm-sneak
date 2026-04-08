@@ -14,7 +14,7 @@ from llmsneak.utils.timing import TimingConfig
 
 
 DEFAULT_HEADERS = {
-    "User-Agent": "LLMSneak/0.1.0 (https://github.com/llmsneak/llmsneak)",
+    "User-Agent": "LLMSneak/0.1.0 (https://github.com/Parthiv221197/llm-sneak)",
     "Accept":     "application/json",
 }
 

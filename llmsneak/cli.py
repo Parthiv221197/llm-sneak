@@ -157,6 +157,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="API key for authenticated probing (enables fingerprinting and guard detection)",
     )
     auth.add_argument(
+        "--api-format",
+        metavar="FORMAT",
+        default=None,
+        dest="api_format_override",
+        choices=["openai", "anthropic", "ollama", "google", "cohere"],
+        help="Override API format detection: openai | anthropic | ollama | google | cohere",
+    )
+    auth.add_argument(
         "--model",
         metavar="MODEL",
         default=None,
@@ -274,7 +282,7 @@ def build_parser() -> argparse.ArgumentParser:
     misc.add_argument(
         "--version",
         action="version",
-        version=f"llm-sneak {VERSION} — {HOMEPAGE}",
+        version=f"llm-sneak {VERSION}",
     )
 
     return parser

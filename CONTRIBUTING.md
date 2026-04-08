@@ -152,7 +152,7 @@ How to find these signatures:
 
 ```bash
 # Clone
-git clone https://github.com/safellm/llm-sneak.git
+git clone https://github.com/Parthiv221197/llm-sneak.git
 cd llm-sneak
 
 # Install with dev dependencies (choose one)
@@ -204,7 +204,7 @@ A maintainer will review your PR within a few days. We may ask for:
 
 ## Reporting Bugs
 
-Use the [Bug Report template](https://github.com/safellm/llm-sneak/issues/new?template=bug_report.md).
+Use the [Bug Report template](https://github.com/Parthiv221197/llm-sneak/issues/new?template=bug_report.md).
 
 Please include:
 - `llm-sneak --version` output

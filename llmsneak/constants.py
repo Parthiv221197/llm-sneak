@@ -5,7 +5,7 @@ Extend these dicts to add support for new providers.
 
 VERSION   = "0.1.0"
 BANNER    = f"llm-sneak {VERSION}"
-HOMEPAGE  = "https://github.com/safellm/llm-sneak"
+HOMEPAGE  = "https://github.com/Parthiv221197/llm-sneak"
 
 # ---------------------------------------------------------------------------
 # Endpoint paths to probe  (path, service_label)

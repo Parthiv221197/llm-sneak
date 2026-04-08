@@ -58,5 +58,5 @@ Versioning: [Semantic Versioning](https://semver.org/)
 - Makefile: `make install` / `make install-dev` / `make poetry` / `make test` / `make clean`
 - pyproject.toml: pip + Poetry compatible
 
-[Unreleased]: https://github.com/safellm/llm-sneak/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/safellm/llm-sneak/releases/tag/v0.1.0
+[Unreleased]: https://github.com/Parthiv221197/llm-sneak/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Parthiv221197/llm-sneak/releases/tag/v0.1.0

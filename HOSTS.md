@@ -210,7 +210,7 @@ llm-sneak -A \
 
 ```bash
 # On the remote machine (any OS, Python not required):
-git clone https://github.com/safellm/llm-sneak
+git clone https://github.com/Parthiv221197/llm-sneak
 cd llm-sneak
 docker build -t llm-sneak .
 
@@ -310,4 +310,4 @@ done
 
 ---
 
-*For updates to this list, see: https://github.com/safellm/llm-sneak/blob/main/HOSTS.md*
+*For updates to this list, see: https://github.com/Parthiv221197/llm-sneak/blob/main/HOSTS.md*

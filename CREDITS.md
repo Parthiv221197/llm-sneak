@@ -187,7 +187,7 @@ academic work.
 ## 7. How to Get Your Name Here
 
 Every merged PR earns a place in the repository's
-[Contributors graph](https://github.com/safellm/llm-sneak/graphs/contributors).
+[Contributors graph](https://github.com/Parthiv221197/llm-sneak/graphs/contributors).
 Significant contributions (new probe packs, new phases, major fixes) will be
 called out in the [CHANGELOG](CHANGELOG.md).
 

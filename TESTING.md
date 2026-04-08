@@ -257,4 +257,4 @@ When reporting test results (bug reports, comparisons, probe pack PRs):
 4. Model version: `ollama show llama3 | head -5`
 5. OS and Python version
 
-Open an issue at: https://github.com/safellm/llm-sneak/issues
+Open an issue at: https://github.com/Parthiv221197/llm-sneak/issues

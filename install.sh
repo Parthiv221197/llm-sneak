@@ -2,7 +2,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # llm-sneak installer
 # Usage:  bash install.sh
-#         curl -sSL https://raw.githubusercontent.com/safellm/llm-sneak/main/install.sh | bash
+#         curl -sSL https://raw.githubusercontent.com/Parthiv221197/llm-sneak/main/install.sh | bash
 # ─────────────────────────────────────────────────────────────────────────────
 set -e
 
@@ -25,7 +25,7 @@ echo -e "${BOLD}${CYAN}  | | | | | | | |___\\__ \\ | | |  __/ (_| |   < ${RESET}
 echo -e "${BOLD}${CYAN}  |_|_|_| |_| |_|   |___/_| |_|\\___|\\__,_|_|\\_\\${RESET}"
 echo ""
 echo -e "  ${BOLD}LLM Security Scanner${RESET}  ${DIM}— Like Nmap, but for AI${RESET}"
-echo -e "  ${DIM}https://github.com/safellm/llm-sneak${RESET}"
+echo -e "  ${DIM}https://github.com/Parthiv221197/llm-sneak${RESET}"
 echo ""
 echo "  ─────────────────────────────────────────────"
 echo ""
@@ -130,5 +130,5 @@ echo ""
 echo -e "  ${CYAN}# All flags${RESET}"
 echo "  llm-sneak --help"
 echo ""
-echo -e "  ${DIM}Docs: https://github.com/safellm/llm-sneak${RESET}"
+echo -e "  ${DIM}Docs: https://github.com/Parthiv221197/llm-sneak${RESET}"
 echo ""

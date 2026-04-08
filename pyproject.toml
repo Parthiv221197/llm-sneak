@@ -62,11 +62,11 @@ dev = [
 
 # ── URLs ──────────────────────────────────────────────────────────────────────
 [project.urls]
-Homepage        = "https://github.com/safellm/llm-sneak"
-Repository      = "https://github.com/safellm/llm-sneak"
-"Bug Tracker"   = "https://github.com/safellm/llm-sneak/issues"
-Changelog       = "https://github.com/safellm/llm-sneak/blob/main/CHANGELOG.md"
-Documentation   = "https://github.com/safellm/llm-sneak/wiki"
+Homepage        = "https://github.com/Parthiv221197/llm-sneak"
+Repository      = "https://github.com/Parthiv221197/llm-sneak"
+"Bug Tracker"   = "https://github.com/Parthiv221197/llm-sneak/issues"
+Changelog       = "https://github.com/Parthiv221197/llm-sneak/blob/main/CHANGELOG.md"
+Documentation   = "https://github.com/Parthiv221197/llm-sneak/wiki"
 
 # ── Setuptools: find the package + include YAML probe packs ──────────────────
 [tool.setuptools.packages.find]
@@ -83,10 +83,10 @@ include = ["llmsneak*"]
 name        = "llm-sneak"
 version     = "0.1.0"
 description = "LLM-Sneak — LLM Security Scanner. Like Nmap, but for AI."
-authors     = ["llm-sneak Contributors <hello@llm-sneak.dev>"]
+authors     = ["llm-sneak Contributors <parthiv@llm-sneak.dev>"]
 license     = "MIT"
 readme      = "README.md"
-repository  = "https://github.com/safellm/llm-sneak"
+repository  = "https://github.com/Parthiv221197/llm-sneak"
 keywords    = ["llm", "security", "nmap", "recon", "fingerprinting", "ai"]
 packages    = [{ include = "llmsneak" }]
 include     = ["llmsneak/probes/packs/*.yaml"]
