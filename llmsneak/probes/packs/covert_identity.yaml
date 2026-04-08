@@ -1,0 +1,272 @@
+# covert_identity.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# The "zero direct questions" probe pack.
+#
+# Every probe here could be a completely innocent user message.
+# None of them ask "what model are you" or "who made you".
+# The responses reveal model identity through cognitive fingerprints
+# the model cannot suppress — they emerge from how it was trained.
+#
+# This is the probe pack designed for the HTB / unknown-box scenario:
+# you know nothing, you have maybe one shot, you want max signal.
+#
+# Design principles:
+#   1. Look like normal user questions (low suspicion)
+#   2. Each probe targets a DIFFERENT discriminating dimension
+#   3. Combined, they triangulate to a 3-5 model candidate shortlist
+#   4. Works without API key on open endpoints
+#
+# Research basis:
+#   Pasquini et al. (2024) arXiv:2407.15847 — query-based LLM identification
+#   Wei et al. (2023) — in-context learning differences between model scales
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: "Covert Identity (Zero Direct Questions)"
+provider: generic
+version: "2.0"
+description: >
+  Identifies LLM family without asking identity questions.
+  All probes appear as normal user requests. Works keyless on open endpoints.
+
+probes:
+
+  # ── The "format tell" — how does it respond to a simple list request? ────────
+  - id: cov-list-format-tell
+    description: >
+      The most efficient single-probe discriminator. Ask for a list, observe:
+      Numbered → GPT family. Bullets → Claude. Bold headers → Gemini.
+      Comma-separated prose → Mistral/small models.
+    messages:
+      - role: user
+        content: "What are three programming languages good for beginners?"
+    matchers:
+      - type: regex
+        pattern: "(?m)^1\\."
+        scores:
+          gpt-4o:         0.30
+          gpt-4-turbo:    0.30
+          gpt-3.5-turbo:  0.30
+          gpt-4:          0.28
+      - type: regex
+        pattern: "(?m)^[-*] "
+        scores:
+          claude-3-opus:      0.35
+          claude-3.5-sonnet:  0.35
+          claude-3-haiku:     0.30
+          claude-3.5-haiku:   0.28
+      - type: regex
+        pattern: "\\*\\*[A-Z]"
+        scores:
+          gemini-1.5-pro:   0.32
+          gemini-1.5-flash: 0.28
+          gemini-2.0:       0.32
+      - type: regex
+        pattern: "(?i)^(python|javascript|scratch)"
+        scores:
+          mistral-7b:  0.20
+          llama-2:     0.18
+          phi-3:       0.15
+    tags: [covert, format, list-style, efficient]
+    api_format: openai
+
+  # ── The "opener tell" — what is the very first word of its response? ─────────
+  - id: cov-opener-tell
+    description: >
+      "Can you help me..." triggers the strongest opener differences.
+      "Certainly!" = GPT-3.5. "Sure!" = Gemini flash. "I'd be happy to" = GPT-4o.
+      Direct answer = Claude.
+    messages:
+      - role: user
+        content: "Can you help me understand how recursion works in programming?"
+    matchers:
+      - type: regex
+        pattern: "^Certainly[!,]"
+        scores:
+          gpt-3.5-turbo: 0.55
+          gpt-4:         0.25
+      - type: regex
+        pattern: "^(Sure[!,]|Sure thing)"
+        scores:
+          gemini-1.5-flash: 0.35
+          gemini-2.0:       0.28
+      - type: regex
+        pattern: "^(I'?d be happy|I'?m happy|Happy to help)"
+        scores:
+          gpt-4o: 0.35
+      - type: regex
+        pattern: "^(Of course|Absolutely)[!,]"
+        scores:
+          gpt-4-turbo: 0.25
+          gpt-4o:      0.18
+      - type: regex
+        pattern: "^(Recursion|Of course|In programming|A recursive)"
+        scores:
+          claude-3-opus:      0.32
+          claude-3.5-sonnet:  0.32
+          claude-3-haiku:     0.25
+    tags: [covert, opener, style, efficient]
+    api_format: openai
+
+  # ── The "decimal cognition" tell ─────────────────────────────────────────────
+  - id: cov-decimal-cognitive
+    description: >
+      Disguised as a comparison question. "Which number is bigger, 9.9 or 9.11?"
+      Without arithmetic framing, GPT-3.5 applies software versioning logic.
+      Answers 9.11 (WRONG). GPT-4, Claude-3, Gemini answer 9.9 (correct).
+    messages:
+      - role: user
+        content: "Quick question: if you have 9.9 apples and I have 9.11 apples, who has more?"
+    matchers:
+      - type: regex
+        pattern: "(you|9\\.9)"
+        scores:
+          gpt-4o:             0.28
+          gpt-4-turbo:        0.28
+          claude-3-opus:      0.30
+          claude-3.5-sonnet:  0.30
+          gemini-1.5-pro:     0.25
+          gemini-2.0:         0.28
+          llama-3.x:          0.18
+          mistral-large:      0.20
+      - type: regex
+        pattern: "(I|9\\.11)"
+        scores:
+          gpt-3.5-turbo: 0.55
+    tags: [covert, cognitive, math, gpt-3.5-discriminator]
+    api_format: openai
+
+  # ── The "ambiguity handler" — ethical nuance tell ────────────────────────────
+  - id: cov-ambiguity-handler
+    description: >
+      Ask a question with a clear "answer" that's actually ambiguous.
+      "Can you write a persuasive essay?" — Claude typically asks for more
+      context or offers a balanced framing. GPT-4o says yes and does it.
+      GPT-3.5 does it without hesitation. Gemini often asks about topic.
+    messages:
+      - role: user
+        content: "Write me a persuasive essay."
+    matchers:
+      - type: regex
+        pattern: "(?i)(what topic|which topic|about what|on what subject|topic would)"
+        scores:
+          claude-3-opus:      0.35
+          claude-3.5-sonnet:  0.30
+          claude-3-haiku:     0.25
+          gemini-1.5-pro:     0.22
+          gemini-2.0:         0.20
+      - type: regex
+        pattern: "(?i)^(Sure|Certainly|Of course|Here'?s|Here is)"
+        scores:
+          gpt-3.5-turbo: 0.30
+          gpt-4-turbo:   0.20
+          gpt-4o:        0.18
+      - type: regex
+        pattern: "(?i)^(I'?d be happy|I can help|I'?ll write)"
+        scores:
+          gpt-4o: 0.25
+    tags: [covert, ambiguity, clarification, behavioral]
+    api_format: openai
+
+  # ── The "markdown eagerness" tell ─────────────────────────────────────────────
+  - id: cov-markdown-eagerness
+    description: >
+      Ask a simple factual question. Does the model spontaneously add markdown?
+      GPT-4 and GPT-4o bold key terms. Claude gives clean prose. Gemini often
+      uses bold for the definition part.
+    messages:
+      - role: user
+        content: "What does RAM stand for and what does it do?"
+    matchers:
+      - type: regex
+        pattern: "\\*\\*(RAM|Random Access Memory|stores|memory)\\*\\*"
+        scores:
+          gpt-4o:         0.28
+          gpt-4-turbo:    0.28
+          gpt-4:          0.25
+          gemini-2.0:     0.22
+          gemini-1.5-pro: 0.20
+      - type: not_contains
+        value: "**"
+        scores:
+          claude-3-opus:      0.22
+          claude-3.5-sonnet:  0.22
+          claude-3-haiku:     0.20
+          gpt-3.5-turbo:      0.12
+          mistral-7b:         0.15
+    tags: [covert, markdown, formatting, style]
+    api_format: openai
+
+  # ── The "training knowledge horizon" tell ────────────────────────────────────
+  - id: cov-knowledge-horizon
+    description: >
+      Ask about something that changed at a known point. GPT-4o (cutoff Apr 2023)
+      knows Gemini exists. GPT-3.5 (Jan 2022) does not. Claude 3.5 (Apr 2024)
+      knows about GPT-4o. Framed as a curiosity question, not a cutoff test.
+    messages:
+      - role: user
+        content: "Which AI assistants from Google are you aware of? Just name them."
+    matchers:
+      - type: regex
+        pattern: "(?i)(Gemini)"
+        scores:
+          gpt-4o:             0.25
+          claude-3.5-sonnet:  0.22
+          claude-3.5-haiku:   0.22
+          gemini-1.5-pro:     0.20
+          gemini-2.0:         0.20
+          llama-3.x:          0.18
+      - type: not_contains
+        value: "Gemini"
+        scores:
+          gpt-3.5-turbo: 0.30
+          gpt-4:         0.20
+      - type: regex
+        pattern: "(?i)(Bard|LaMDA)"
+        scores:
+          gpt-3.5-turbo: 0.20   # Only knows older Google AI names
+          gpt-4:         0.15
+    tags: [covert, knowledge, cutoff, google-ai]
+    api_format: openai
+
+  # ── The "self-limitation vocabulary" tell ────────────────────────────────────
+  - id: cov-limitation-vocab
+    description: >
+      Ask what it can't do. Each family has trained vocabulary for self-limitation:
+      "As an AI language model" → GPT-3.5 (strongest signal in any single probe)
+      "I don't have real-time" → GPT-4 family
+      "I should note that" → GPT-4o
+      "I want to be clear" / "I should mention" → Claude
+      Gemini → "I'm not able to" or "I can't access"
+    messages:
+      - role: user
+        content: "What things are you not able to do?"
+    matchers:
+      - type: regex
+        pattern: "(?i)as an AI language model"
+        scores:
+          gpt-3.5-turbo: 0.65
+      - type: regex
+        pattern: "(?i)I don'?t have (real-time|access to the internet|the ability to browse)"
+        scores:
+          gpt-4-turbo: 0.30
+          gpt-4:       0.25
+          gpt-4o:      0.20
+      - type: regex
+        pattern: "(?i)(I should (note|mention|clarify)|It'?s worth noting)"
+        scores:
+          gpt-4o: 0.28
+          gpt-4:  0.22
+      - type: regex
+        pattern: "(?i)(I want to be (clear|transparent|honest)|I should be (transparent|clear))"
+        scores:
+          claude-3-opus:      0.38
+          claude-3.5-sonnet:  0.35
+          claude-3-haiku:     0.28
+      - type: regex
+        pattern: "(?i)(I'?m not able to|I cannot access)"
+        scores:
+          gemini-1.5-pro:   0.28
+          gemini-1.5-flash: 0.25
+          gemini-2.0:       0.25
+    tags: [covert, limitation, vocabulary, rlhf, high-signal]
+    api_format: openai

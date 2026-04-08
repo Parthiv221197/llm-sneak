@@ -1,0 +1,132 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# llm-sneak — pyproject.toml
+#
+# Installs via:
+#   pip install .                →  adds `llm-sneak` command globally
+#   poetry install               →  same, inside a managed venv
+# ─────────────────────────────────────────────────────────────────────────────
+
+[build-system]
+requires      = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# ── Core metadata ─────────────────────────────────────────────────────────────
+[project]
+name            = "llm-sneak"
+version         = "0.1.0"
+description     = "LLM-Sneak — LLM Security Scanner. Like Nmap, but for AI endpoints."
+readme          = "README.md"
+license         = { text = "MIT" }
+requires-python = ">=3.10"
+keywords        = [
+  "llm", "security", "recon", "fingerprinting", "ai-security",
+  "red-team", "owasp", "prompt-injection", "nmap", "scanner"
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Information Technology",
+  "Topic :: Security",
+  "Topic :: Internet",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Environment :: Console",
+  "Operating System :: OS Independent",
+]
+
+# ── Runtime deps (auto-installed by pip) ─────────────────────────────────────
+dependencies = [
+  "httpx[http2]>=0.27.0",   # Async HTTP client (HTTP/2 support)
+  "rich>=13.7.0",           # Beautiful terminal output
+  "pyyaml>=6.0.0",          # Probe pack YAML loading
+]
+
+# ── The `llm-sneak` command ───────────────────────────────────────────────────
+[project.scripts]
+llm-sneak = "llmsneak.cli:main"
+
+# ── Dev extras (pytest, linters) ─────────────────────────────────────────────
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-asyncio>=0.23",
+  "respx>=0.21",
+  "black>=24.0",
+  "ruff>=0.4.0",
+  "mypy>=1.9",
+]
+
+# ── URLs ──────────────────────────────────────────────────────────────────────
+[project.urls]
+Homepage        = "https://github.com/safellm/llm-sneak"
+Repository      = "https://github.com/safellm/llm-sneak"
+"Bug Tracker"   = "https://github.com/safellm/llm-sneak/issues"
+Changelog       = "https://github.com/safellm/llm-sneak/blob/main/CHANGELOG.md"
+Documentation   = "https://github.com/safellm/llm-sneak/wiki"
+
+# ── Setuptools: find the package + include YAML probe packs ──────────────────
+[tool.setuptools.packages.find]
+where   = ["."]
+include = ["llmsneak*"]
+
+[tool.setuptools.package-data]
+"llmsneak.probes.packs" = ["*.yaml"]
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Poetry (same deps, Poetry syntax — used if you prefer `poetry install`)
+# ═════════════════════════════════════════════════════════════════════════════
+[tool.poetry]
+name        = "llm-sneak"
+version     = "0.1.0"
+description = "LLM-Sneak — LLM Security Scanner. Like Nmap, but for AI."
+authors     = ["llm-sneak Contributors <hello@llm-sneak.dev>"]
+license     = "MIT"
+readme      = "README.md"
+repository  = "https://github.com/safellm/llm-sneak"
+keywords    = ["llm", "security", "nmap", "recon", "fingerprinting", "ai"]
+packages    = [{ include = "llmsneak" }]
+include     = ["llmsneak/probes/packs/*.yaml"]
+
+[tool.poetry.dependencies]
+python  = ">=3.10"
+httpx   = { version = ">=0.27.0", extras = ["http2"] }
+rich    = ">=13.7.0"
+pyyaml  = ">=6.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest         = ">=8.0"
+pytest-asyncio = ">=0.23"
+respx          = ">=0.21"
+black          = ">=24.0"
+ruff           = ">=0.4.0"
+mypy           = ">=1.9"
+
+[tool.poetry.scripts]
+llm-sneak = "llmsneak.cli:main"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Tool configurations
+# ═════════════════════════════════════════════════════════════════════════════
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths    = ["tests"]
+
+[tool.ruff]
+line-length    = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
+
+[tool.black]
+line-length    = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.mypy]
+python_version         = "3.10"
+ignore_missing_imports = true

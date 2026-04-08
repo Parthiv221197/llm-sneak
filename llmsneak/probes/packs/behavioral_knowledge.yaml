@@ -1,0 +1,183 @@
+# behavioral_knowledge.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# CATEGORY: Knowledge Recency & Training Cutoff Inference
+#
+# Key insight: We never ASK what the cutoff is. Instead we ask about
+# specific real-world events or facts that exist at known points in time,
+# and observe what the model knows vs. doesn't know.
+#
+# This is analogous to carbon dating — we don't ask "how old are you?"
+# we measure the decay of knowledge precision at known points.
+#
+# Technique: Ask about things that CHANGED at known dates:
+#   - Technology releases (models, hardware, software)
+#   - Factual record holders that changed at known dates
+#   - Events with known timelines
+#
+# The model's knowledge boundary + response uncertainty together triangulate
+# the training cutoff, which differs reliably across model families:
+#   GPT-3.5:   ~Jan 2022
+#   GPT-4:     ~Sep 2021  (original) / Dec 2023 (turbo)
+#   GPT-4o:    ~Apr 2023
+#   Claude-3:  ~Aug 2023
+#   Claude-3.5: ~Apr 2024
+#   Gemini 1.5: Dec 2023
+#   Gemini 2.0: ~Aug 2024
+#   LLaMA-3:   ~Dec 2023
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: "Behavioral: Knowledge Recency Inference"
+provider: generic
+version: "2.0"
+description: >
+  Infers training cutoff by probing knowledge of events at known dates.
+  Never asks "when is your cutoff?" — instead measures knowledge boundaries
+  indirectly. Cutoff is a reliable discriminator between model generations.
+
+probes:
+
+  # ── GPT-4o knowledge (Apr 2023 marker) ──────────────────────────────────────
+  - id: bfp-knowledge-gpt4o-release
+    description: >
+      GPT-4o was announced May 13, 2024. Models trained before this won't
+      know it exists. GPT-4o itself knows about it; models with earlier
+      cutoffs (GPT-3.5, Claude-3-Haiku, original GPT-4) will not.
+      This cleanly separates pre-May-2024 from post-May-2024 models.
+    messages:
+      - role: user
+        content: "What is GPT-4o and when was it released? If you don't know, say 'unknown'."
+    matchers:
+      - type: regex
+        pattern: "(May|2024)"
+        scores:
+          gpt-4o:             0.28
+          claude-3.5-sonnet:  0.22
+          claude-3.5-haiku:   0.22
+          gemini-2.0:         0.22
+          llama-3.x:          0.15
+      - type: contains
+        value: "unknown"
+        scores:
+          gpt-3.5-turbo: 0.30
+          gpt-4:         0.20
+          claude-3-haiku: 0.15
+      - type: regex
+        pattern: "don'?t have (information|knowledge|details)"
+        scores:
+          claude-3-haiku: 0.20
+          claude-3-opus:  0.15
+          gpt-4:          0.20
+    tags: [knowledge, cutoff, gpt4o, 2024]
+    api_format: openai
+
+  # ── Claude-3 family knowledge marker ────────────────────────────────────────
+  - id: bfp-knowledge-claude3-exists
+    description: >
+      Claude 3 was released March 4, 2024. Models trained before this won't
+      have knowledge of the Claude 3 family. Tests whether the model
+      knows about its competition — a passive knowledge boundary probe.
+    messages:
+      - role: user
+        content: "Name the three models in the Claude 3 family released by Anthropic. If you don't know, say 'unknown'."
+    matchers:
+      - type: regex
+        pattern: "(Haiku|Sonnet|Opus)"
+        scores:
+          gpt-4o:             0.22
+          claude-3.5-sonnet:  0.15
+          claude-3.5-haiku:   0.15
+          gemini-1.5-pro:     0.18
+          gemini-2.0:         0.20
+          llama-3.x:          0.15
+          mistral-large:      0.12
+      - type: contains
+        value: "unknown"
+        scores:
+          gpt-3.5-turbo: 0.35
+          gpt-4:         0.25
+    tags: [knowledge, cutoff, claude3, 2024]
+    api_format: openai
+
+  # ── Llama 3 knowledge marker ─────────────────────────────────────────────────
+  - id: bfp-knowledge-llama3-exists
+    description: >
+      Llama 3 was released April 18, 2024. Models with earlier training
+      cutoffs won't know about it. Especially useful for distinguishing
+      GPT-4 (Sep 2021 cutoff) from GPT-4o (Apr 2023+).
+    messages:
+      - role: user
+        content: "What are the two sizes of Meta's Llama 3 base models? If unknown, say 'unknown'."
+    matchers:
+      - type: regex
+        pattern: "(8B|70B|8 billion|70 billion)"
+        scores:
+          gpt-4o:            0.22
+          claude-3.5-sonnet: 0.20
+          gemini-2.0:        0.20
+          gemini-1.5-pro:    0.18
+          llama-3.x:         0.12   # ironic — llama knows about llama
+      - type: contains
+        value: "unknown"
+        scores:
+          gpt-3.5-turbo: 0.30
+          gpt-4:         0.25
+          claude-3-haiku: 0.15
+    tags: [knowledge, cutoff, llama3, meta]
+    api_format: openai
+
+  # ── Training cutoff triangulation ────────────────────────────────────────────
+  - id: bfp-knowledge-cutoff-year
+    description: >
+      Ask for training year without asking about cutoff. "What year were you
+      trained on data up to?" is more natural and gets a direct year answer
+      rather than hedging, which we can use to discriminate model generations.
+    messages:
+      - role: user
+        content: "What year does your training data go up to? Just the year."
+    matchers:
+      - type: contains
+        value: "2021"
+        scores:
+          gpt-3.5-turbo: 0.45
+      - type: contains
+        value: "2023"
+        scores:
+          gpt-4-turbo:    0.30
+          gpt-4o:         0.25
+          gemini-1.5-pro: 0.20
+          llama-3.x:      0.20
+      - type: contains
+        value: "2024"
+        scores:
+          claude-3-opus:      0.30
+          claude-3.5-sonnet:  0.30
+          claude-3.5-haiku:   0.30
+          gemini-2.0:         0.25
+    tags: [knowledge, cutoff, year, training]
+    api_format: openai
+
+  # ── Recency calibration: does it know about GPT-4 itself ──────────────────
+  - id: bfp-knowledge-gpt4-release-date
+    description: >
+      GPT-4 was publicly released March 14, 2023. Models trained before this
+      won't know. Tests the 2023 knowledge boundary. Combined with other
+      probes, helps place the model in a 6-month training window.
+    messages:
+      - role: user
+        content: "In what month and year was GPT-4 first publicly released? Give month and year only."
+    matchers:
+      - type: regex
+        pattern: "(March|Mar).*(2023)"
+        scores:
+          gpt-4o:             0.22
+          gpt-4-turbo:        0.20
+          claude-3-opus:      0.20
+          claude-3.5-sonnet:  0.20
+          gemini-1.5-pro:     0.18
+          llama-3.x:          0.15
+      - type: contains
+        value: "unknown"
+        scores:
+          gpt-3.5-turbo: 0.20   # GPT-3.5 cutoff is before GPT-4 existed
+    tags: [knowledge, gpt4, 2023, cutoff]
+    api_format: openai

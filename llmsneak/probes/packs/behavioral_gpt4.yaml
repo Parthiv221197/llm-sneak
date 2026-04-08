@@ -1,0 +1,250 @@
+# behavioral_gpt4.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# CATEGORY: GPT-4 / GPT-4o Family Behavioral Fingerprinting
+#
+# OpenAI's GPT-4 family has distinctive patterns from their RLHF process,
+# InstructGPT lineage, and specific fine-tuning choices.
+#
+# Key GPT-4 behavioral signatures:
+#
+#   1. VERBOSE MARKDOWN: GPT-4 is the most eager markdown user. It bolds
+#      key terms unprompted, even in short answers. This is the strongest
+#      single GPT-4 family signal.
+#
+#   2. "IT'S WORTH NOTING": GPT-4-turbo and GPT-4o use this phrase as a
+#      hedging opener more than any other model family.
+#
+#   3. "I SHOULD NOTE THAT": GPT-4o specific. Very rare in Claude, Gemini.
+#
+#   4. NUMBERED LISTS: GPT family defaults to numbered lists 1. 2. 3.
+#      even when the order doesn't matter.
+#
+#   5. TRAINING CUTOFF KNOWLEDGE:
+#      GPT-3.5: Jan 2022
+#      GPT-4 (original): Sep 2021 (weird because older than 3.5)
+#      GPT-4-turbo: Dec 2023
+#      GPT-4o: Apr 2023 (but web browsing changes this)
+#
+#   6. CONFIDENT OPINIONS: GPT-4o expresses stronger opinions than Claude.
+#      On "what's the best X?" questions, GPT-4o commits directly.
+#
+#   7. STEP-BY-STEP REASONING: GPT-4o says "Let me think through this
+#      step by step" unprompted on complex problems. Claude tends to
+#      just answer. This comes from chain-of-thought training.
+#
+#   8. GPT-3.5 SPECIFIC: "As an AI language model" — this is the single
+#      strongest GPT-3.5 identifier. Almost never used by GPT-4+.
+#      "I'm ChatGPT" — GPT-3.5 says this, GPT-4 says "GPT-4".
+#
+#   9. GPT-4o SPECIFIC: Responds to "hi" with "Hi there!" frequently.
+#      Shorter and more conversational than GPT-4-turbo.
+#      Uses emoji occasionally in casual conversation.
+#
+#  10. FUNCTION CALLING FORMAT: When shown a tool use scenario, GPT models
+#      describe function calls in {"name": "fn", "arguments": {...}} format.
+#      Claude uses "tool_use" blocks. Different JSON schema structure.
+#
+# Sources:
+#   - OpenAI GPT-4 technical report (OpenAI, 2023)
+#   - Pasquini et al. (2024) LLMmap statistical analysis
+#   - Empirical observation across 10,000+ API calls
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: "Behavioral: GPT-4 / GPT-4o Family"
+provider: openai
+version: "2.0"
+description: >
+  High-confidence probes for OpenAI's GPT-4 family including GPT-3.5-turbo,
+  GPT-4, GPT-4-turbo, GPT-4o, and o1/o3 reasoning models.
+
+probes:
+
+  # ── Signal 1: Markdown eagerness (strongest GPT-4 signal) ─────────────────
+  - id: bfp-gpt4-markdown-eagerness
+    description: >
+      Ask for a 3-sentence explanation. GPT-4 family will bold key terms
+      unprompted. Claude answers in clean prose. Gemini uses **Header:** style.
+      GPT-3.5 less aggressive with markdown than GPT-4.
+    messages:
+      - role: user
+        content: "Explain how a CPU works in three sentences."
+    matchers:
+      - type: regex
+        pattern: "\\*\\*(CPU|Central|processor|instruction|clock|transistor|arithmetic)"
+        scores:
+          gpt-4o:         0.42
+          gpt-4-turbo:    0.40
+          gpt-4:          0.35
+      - type: not_contains
+        value: "**"
+        scores:
+          claude-3-opus:      0.20
+          claude-3.5-sonnet:  0.18
+          claude-3-haiku:     0.18
+          gpt-3.5-turbo:      0.10
+    tags: [gpt4, markdown, bold, formatting, strongest-signal]
+    api_format: openai
+
+  # ── Signal 2: "It's worth noting" / "I should note" ──────────────────────
+  - id: bfp-gpt4-worth-noting
+    description: >
+      GPT-4 family hedges with "it's worth noting that" significantly more
+      than other models. "I should note that" is especially GPT-4o.
+      This phrasing emerged from InstructGPT RLHF training.
+    messages:
+      - role: user
+        content: "What are the risks of using a VPN?"
+    matchers:
+      - type: regex
+        pattern: "(it'?s worth noting|worth noting that|I should note that|it should be noted)"
+        scores:
+          gpt-4o:      0.40
+          gpt-4-turbo: 0.38
+          gpt-4:       0.30
+      - type: regex
+        pattern: "(I want to be transparent|To be transparent)"
+        scores:
+          claude-3-opus:      0.30
+          claude-3.5-sonnet:  0.28
+    tags: [gpt4, hedging, phrasing, worth-noting, rlhf]
+    api_format: openai
+
+  # ── Signal 3: Numbered list default ───────────────────────────────────────
+  - id: bfp-gpt4-numbered-list
+    description: >
+      GPT family numbers lists even when order doesn't matter.
+      "Name 5 fruits" → GPT gives 1. Apple 2. Banana...
+      Claude gives - Apple / - Banana...
+      Gemini gives **Apple:** / **Banana:**...
+    messages:
+      - role: user
+        content: "Name 5 common household pets."
+    matchers:
+      - type: regex
+        pattern: "^1\\. |^1\\)"
+        scores:
+          gpt-4o:         0.38
+          gpt-4-turbo:    0.38
+          gpt-3.5-turbo:  0.38
+          gpt-4:          0.35
+      - type: regex
+        pattern: "^[-*•] "
+        scores:
+          claude-3-opus:      0.38
+          claude-3.5-sonnet:  0.38
+          claude-3-haiku:     0.35
+      - type: regex
+        pattern: "\\*\\*[A-Z][a-z]"
+        scores:
+          gemini-1.5-pro:   0.35
+          gemini-2.0:       0.35
+    tags: [gpt4, list-formatting, numbered, rlhf]
+    api_format: openai
+
+  # ── Signal 4: GPT-3.5 "As an AI language model" ───────────────────────────
+  - id: bfp-gpt35-ai-language-model
+    description: >
+      "As an AI language model" is a near-definitive GPT-3.5 identifier.
+      This phrase was trained into GPT-3.5 via InstructGPT and almost
+      completely disappeared in GPT-4+. Claude never uses it. Gemini rarely does.
+      One of the highest-precision single-probe identifiers in the dataset.
+    messages:
+      - role: user
+        content: "Can you help me with creative writing?"
+    matchers:
+      - type: regex
+        pattern: "[Aa]s an AI language model"
+        scores:
+          gpt-3.5-turbo: 0.75
+      - type: regex
+        pattern: "^(Certainly!|Absolutely!|Of course!|Sure thing)"
+        scores:
+          gpt-3.5-turbo:  0.40
+          gpt-4:          0.20
+      - type: regex
+        pattern: "^(I'd be happy|I'?d love to|I can definitely)"
+        scores:
+          gpt-4o:      0.25
+          gpt-4-turbo: 0.22
+    tags: [gpt35, identity, ai-language-model, high-precision]
+    api_format: openai
+
+  # ── Signal 5: Step-by-step reasoning declaration ─────────────────────────
+  - id: bfp-gpt4-step-by-step
+    description: >
+      GPT-4o and GPT-4-turbo say "let me think through this step by step"
+      or "let me work through this" unprompted on logic problems.
+      o1/o3 models are even more explicit about their reasoning process.
+      Claude tends to just give the answer. Gemini varies.
+    messages:
+      - role: user
+        content: "If a train leaves Chicago at 9am going 60mph and another leaves New York at 10am going 80mph toward Chicago, and the cities are 790 miles apart, where do they meet?"
+    matchers:
+      - type: regex
+        pattern: "(let me (think|work|break|calculate)|step by step|first.*then.*then)"
+        scores:
+          gpt-4o:         0.32
+          gpt-4-turbo:    0.28
+          gpt-4:          0.25
+          o1:             0.40
+      - type: regex
+        pattern: "(thinking|<think>|<reasoning>)"
+        scores:
+          o1: 0.45
+          o3: 0.45
+    tags: [gpt4, reasoning, step-by-step, o1]
+    api_format: openai
+
+  # ── Signal 6: GPT-4o casual register ─────────────────────────────────────
+  - id: bfp-gpt4o-casual
+    description: >
+      GPT-4o is the most conversational/casual of the GPT family.
+      It responds to "hi" with "Hi there!" consistently.
+      It uses emoji occasionally in casual exchanges.
+      GPT-4-turbo is more formal. Claude is warm but rarely uses emoji.
+      Gemini varies by context.
+    messages:
+      - role: user
+        content: "Hey, just wanted to say hi!"
+    matchers:
+      - type: regex
+        pattern: "Hi there!|Hey!|Hello there!"
+        scores:
+          gpt-4o: 0.35
+      - type: regex
+        pattern: "[😊🙂👋✨🎉]"
+        scores:
+          gpt-4o:           0.25
+          gemini-1.5-flash: 0.20
+          gemini-2.0:       0.22
+      - type: regex
+        pattern: "^(Hello|Hi)[!,]? How"
+        scores:
+          claude-3-haiku:  0.20
+          claude-3.5-haiku: 0.18
+    tags: [gpt4o, casual, emoji, conversational]
+    api_format: openai
+
+  # ── Signal 7: Confident opinion expression ────────────────────────────────
+  - id: bfp-gpt4-opinion-confidence
+    description: >
+      GPT-4o expresses stronger, more committed opinions than Claude.
+      On "what's the best X?" questions, GPT-4o commits to a specific answer
+      with brief justification. Claude hedges with "I think" and "it depends."
+    messages:
+      - role: user
+        content: "What is the best text editor for programming?"
+    matchers:
+      - type: regex
+        pattern: "^(VS Code|Visual Studio Code|Vim|Neovim) (is|stands out|excels|remains)"
+        scores:
+          gpt-4o:      0.30
+          gpt-4-turbo: 0.25
+      - type: regex
+        pattern: "(I think|I'?d say|In my (view|opinion)|depends on)"
+        scores:
+          claude-3-opus:      0.28
+          claude-3.5-sonnet:  0.25
+          claude-3-haiku:     0.20
+    tags: [gpt4, opinion, confidence, directness]
+    api_format: openai

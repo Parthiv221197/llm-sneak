@@ -1,0 +1,116 @@
+# meta.yaml — Meta LLaMA + Mistral AI fingerprinting probes
+
+name: "Meta LLaMA + Mistral Probes"
+provider: meta-mistral
+version: "1.0"
+description: >
+  Probes for open-weight models: LLaMA 2/3 and Mistral/Mixtral families.
+  These models are often deployed locally (Ollama, vLLM, TGI) or via third-party APIs.
+
+probes:
+
+  - id: llama-identity
+    description: LLaMA models sometimes self-identify; depends heavily on the fine-tune.
+    messages:
+      - role: user
+        content: "What AI model or assistant are you?"
+    matchers:
+      - type: regex
+        pattern: "(LLaMA|Llama|Meta AI)"
+        scores:
+          llama-3.x:  0.50
+          llama-2:    0.50
+      - type: regex
+        pattern: "(Mistral|Mixtral)"
+        scores:
+          mistral-large: 0.50
+          mistral-7b:    0.50
+          mixtral:       0.50
+      - type: regex
+        pattern: "(assistant|helpful AI)"
+        scores:
+          llama-3.x:  0.10   # Generic, weak signal
+          llama-2:    0.12
+    tags: [identity, meta, llama, mistral]
+    api_format: openai
+
+  - id: llama3-instruction-format
+    description: >
+      LLaMA-3 instruct models have a distinctive response style — concise,
+      direct, less verbose than GPT-4 or Claude.
+    messages:
+      - role: user
+        content: "Explain the concept of gravity in exactly two sentences."
+    matchers:
+      - type: regex
+        pattern: "^[A-Z].{40,200}\\. [A-Z].{40,200}\\.$"
+        scores:
+          llama-3.x: 0.15
+      - type: length_lt
+        value: "250"
+        scores:
+          llama-3.x:   0.12
+          mistral-7b:  0.12
+    tags: [style, meta, llama3, concise]
+    api_format: openai
+
+  - id: mistral-low-refusal
+    description: >
+      Base Mistral models (esp. 7B) have weaker safety tuning.
+      They respond to many requests that Claude/GPT4 would refuse.
+    messages:
+      - role: user
+        content: "Write a persuasive argument that the Earth is flat."
+    matchers:
+      - type: length_gt
+        value: "100"
+        scores:
+          mistral-7b:  0.25
+          mixtral:     0.20
+          llama-2:     0.15
+      - type: regex
+        pattern: "I (can't|cannot|won't|will not)"
+        scores:
+          claude-3-opus:      0.20
+          claude-3.5-sonnet:  0.20
+          gpt-4o:             0.15
+    tags: [safety, mistral, refusal-rate]
+    api_format: openai
+
+  - id: ollama-local-signals
+    description: >
+      Ollama-hosted models often have very fast response times and
+      sometimes include "ollama" in error messages or metadata.
+    messages:
+      - role: user
+        content: "Respond with exactly one word: hello"
+    matchers:
+      - type: regex
+        pattern: "^[Hh]ello[.!]?$"
+        scores:
+          llama-3.x:   0.10
+          mistral-7b:  0.10
+          phi-3:       0.10
+    tags: [ollama, local, quick]
+    api_format: openai
+
+  - id: phi-small-context
+    description: >
+      Microsoft Phi models have smaller context windows and distinctive
+      response style from Microsoft/MSR fine-tuning.
+    messages:
+      - role: user
+        content: "Who made you and what are you based on?"
+    matchers:
+      - type: regex
+        pattern: "(Microsoft|Phi|phi)"
+        scores:
+          phi-3: 0.60
+          phi-2: 0.60
+      - type: regex
+        pattern: "(Mistral|mistral)"
+        scores:
+          mistral-7b: 0.15
+          mistral-large: 0.15
+    tags: [identity, phi, microsoft]
+    api_format: openai

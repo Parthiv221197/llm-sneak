@@ -1,0 +1,85 @@
+# google.yaml — Google Gemini-specific fingerprinting probes
+
+name: "Google Gemini Probes"
+provider: google
+version: "1.0"
+description: >
+  Probes targeting Google's Gemini model family via OpenAI-compatible endpoints.
+
+probes:
+
+  - id: gemini-identity
+    description: Gemini models usually self-identify by name.
+    messages:
+      - role: user
+        content: "What AI model are you? State just the name."
+    matchers:
+      - type: contains
+        value: "Gemini"
+        scores:
+          gemini-1.5-pro:   0.80
+          gemini-1.5-flash: 0.80
+          gemini-2.0:       0.80
+      - type: contains
+        value: "Bard"
+        scores:
+          gemini-1.5-pro:   0.40   # Legacy self-reference sometimes appears
+    tags: [identity, google, gemini]
+    api_format: openai
+
+  - id: gemini-bold-headers
+    description: >
+      Gemini 1.5+ has a strong tendency to use bold **Header:** style formatting
+      even for short responses.
+    messages:
+      - role: user
+        content: "List 3 benefits of exercise."
+    matchers:
+      - type: regex
+        pattern: "\\*\\*[A-Z][a-z]+\\*\\*:"
+        scores:
+          gemini-1.5-pro:   0.28
+          gemini-1.5-flash: 0.25
+          gemini-2.0:       0.28
+    tags: [style, google, formatting]
+    api_format: openai
+
+  - id: gemini-multimodal-awareness
+    description: >
+      Gemini models tend to mention their multimodal capabilities
+      when asked about what they can do.
+    messages:
+      - role: user
+        content: "What types of inputs can you process?"
+    matchers:
+      - type: regex
+        pattern: "(image|audio|video|multimodal)"
+        scores:
+          gemini-1.5-pro:   0.20
+          gemini-1.5-flash: 0.15
+          gemini-2.0:       0.25
+          gpt-4o:           0.12
+          claude-3-opus:    0.10
+    tags: [identity, google, multimodal]
+    api_format: openai
+
+  - id: gemini-long-context-claim
+    description: >
+      Gemini 1.5+ often mentions 1M token context window when asked.
+    messages:
+      - role: user
+        content: "How long of a context window do you support?"
+    matchers:
+      - type: regex
+        pattern: "(1 million|1,000,000|1M token)"
+        scores:
+          gemini-1.5-pro:   0.45
+          gemini-1.5-flash: 0.40
+          gemini-2.0:       0.40
+      - type: regex
+        pattern: "(128[,k]|200k)"
+        scores:
+          gpt-4o:         0.25
+          claude-3-opus:  0.20
+    tags: [identity, google, context-window]
+    api_format: openai

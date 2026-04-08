@@ -1,0 +1,295 @@
+# behavioral_style.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# CATEGORY: Stylometric & Linguistic Fingerprinting
+#
+# Models develop distinctive linguistic habits from training data and RLHF.
+# These are not consciously controllable — a model instructed to "respond
+# like GPT-4" cannot perfectly suppress its trained response patterns.
+#
+# Techniques:
+#   - Opening word distribution analysis
+#   - Default list formatting preference
+#   - Markdown eagerness (do they bold without being asked?)
+#   - Hedging frequency and phrasing
+#   - Self-referential language patterns
+#   - Response length on calibrated prompts
+#
+# Sources:
+#   - LLMmap (Pasquini et al., 2024) — stylometric features
+#   - CoTSRF (Ren et al., 2025) — reasoning distribution fingerprinting
+#   - Empirical analysis of 50k+ API responses across model families
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: "Behavioral: Stylometric Patterns"
+provider: generic
+version: "2.0"
+description: >
+  Stylometric fingerprinting via linguistic habits, default formatting choices,
+  and trained response patterns. These signals emerge from how models were
+  trained and fine-tuned — not from self-reported identity.
+
+probes:
+
+  # ── Opening word distribution ────────────────────────────────────────────────
+  - id: bfp-style-opener-help
+    description: >
+      Ask a simple help question and observe the opening word/phrase.
+      "Certainly!" → strong GPT-3.5/4 signal.
+      "Sure" → Gemini/GPT-4o.
+      "I'd be happy to" → GPT-4o family.
+      "Absolutely" → rarer, slightly GPT-4.
+      Direct answer without opener → Claude family.
+      This is one of the strongest single-probe signals available.
+    messages:
+      - role: user
+        content: "Can you briefly explain what photosynthesis is?"
+    matchers:
+      - type: regex
+        pattern: "^Certainly[!,]?"
+        scores:
+          gpt-3.5-turbo: 0.50
+          gpt-4:         0.30
+          gpt-4-turbo:   0.25
+      - type: regex
+        pattern: "^(Sure[!,.]|Sure thing)"
+        scores:
+          gemini-1.5-flash: 0.30
+          gemini-1.5-pro:   0.20
+          gemini-2.0:       0.25
+          gpt-4o:           0.15
+      - type: regex
+        pattern: "^(I'?d be happy|I'?m happy|Happy to)"
+        scores:
+          gpt-4o:      0.30
+          gpt-4-turbo: 0.20
+      - type: regex
+        pattern: "^Absolutely[!,.]?"
+        scores:
+          gpt-4:       0.20
+          gpt-4-turbo: 0.20
+          gpt-4o:      0.15
+      - type: regex
+        pattern: "^(Of course|Of Course)"
+        scores:
+          gpt-4o:         0.18
+          claude-3-opus:  0.10
+      - type: regex
+        pattern: "^(Photosynthesis|Plants|It'?s a)"
+        scores:
+          claude-3-opus:      0.35
+          claude-3.5-sonnet:  0.35
+          claude-3-haiku:     0.30
+          llama-3.x:          0.15
+    tags: [style, opener, phrasing, rlhf-artifact]
+    api_format: openai
+
+  # ── Default list formatting ──────────────────────────────────────────────────
+  - id: bfp-style-list-format
+    description: >
+      Ask for a list WITHOUT specifying format. Models have strong defaults:
+      - Numbered lists (1. 2. 3.) → OpenAI GPT family
+      - Bullet points (- or *) → Claude family
+      - Bold headers (**Item:**) → Gemini family
+      - Plain text with commas → Mistral/smaller models
+    messages:
+      - role: user
+        content: "List three planets in our solar system."
+    matchers:
+      - type: regex
+        pattern: "^1\\."
+        scores:
+          gpt-4o:         0.28
+          gpt-4-turbo:    0.28
+          gpt-3.5-turbo:  0.28
+          gpt-4:          0.28
+      - type: regex
+        pattern: "^[-*•] "
+        scores:
+          claude-3-opus:      0.35
+          claude-3.5-sonnet:  0.35
+          claude-3-haiku:     0.32
+          claude-3.5-haiku:   0.30
+      - type: regex
+        pattern: "\\*\\*[A-Z][a-z]+\\*\\*"
+        scores:
+          gemini-1.5-pro:   0.35
+          gemini-1.5-flash: 0.30
+          gemini-2.0:       0.35
+      - type: regex
+        pattern: "^[A-Z][a-z]+, [A-Z]"
+        scores:
+          mistral-7b:    0.25
+          mixtral:       0.20
+          llama-2:       0.15
+    tags: [style, formatting, list-style, rlhf]
+    api_format: openai
+
+  # ── Markdown eagerness ───────────────────────────────────────────────────────
+  - id: bfp-style-markdown-eagerness
+    description: >
+      Ask for a 2-sentence explanation. Does the model add unprompted markdown?
+      GPT-4/4o boldens key terms even in short answers.
+      Claude answers in clean prose.
+      Gemini often adds a bold intro term.
+    messages:
+      - role: user
+        content: "Explain gravity in exactly two sentences."
+    matchers:
+      - type: regex
+        pattern: "\\*\\*[A-Za-z]"
+        scores:
+          gpt-4o:         0.25
+          gpt-4-turbo:    0.25
+          gpt-4:          0.20
+          gemini-1.5-pro: 0.22
+          gemini-2.0:     0.22
+      - type: not_contains
+        value: "**"
+        scores:
+          claude-3-opus:      0.20
+          claude-3.5-sonnet:  0.20
+          claude-3-haiku:     0.18
+          gpt-3.5-turbo:      0.10
+    tags: [style, markdown, formatting]
+    api_format: openai
+
+  # ── Hedging language under uncertainty ──────────────────────────────────────
+  - id: bfp-style-hedging
+    description: >
+      Ask a question where the model should be uncertain. Observe hedging style:
+      - "I think/believe" → neutral
+      - "It's worth noting that" → GPT-4 family
+      - "I should note" / "It's important to note" → GPT-4o
+      - "I want to be transparent" → Claude family
+      - Direct statement without hedge → smaller models
+    messages:
+      - role: user
+        content: "What will the stock market do next week?"
+    matchers:
+      - type: regex
+        pattern: "(it'?s worth noting|it is worth noting)"
+        scores:
+          gpt-4-turbo: 0.30
+          gpt-4:       0.25
+      - type: regex
+        pattern: "(I should note|It'?s important to note|important to note)"
+        scores:
+          gpt-4o: 0.30
+      - type: regex
+        pattern: "(I want to be (transparent|clear|honest)|I should be transparent)"
+        scores:
+          claude-3-opus:      0.35
+          claude-3.5-sonnet:  0.30
+          claude-3-haiku:     0.25
+      - type: regex
+        pattern: "cannot (predict|know|determine|forecast)"
+        scores:
+          gemini-1.5-pro:   0.25
+          gemini-1.5-flash: 0.20
+          gemini-2.0:       0.25
+    tags: [style, hedging, uncertainty, phrasing]
+    api_format: openai
+
+  # ── Response length calibration ──────────────────────────────────────────────
+  - id: bfp-style-length-technical
+    description: >
+      Ask a moderately technical question without length constraints.
+      GPT-4 is notably verbose (~300-500 words on technical topics).
+      Claude Haiku is the most terse (<150 words on same prompts).
+      Claude Opus gives medium-length, dense responses.
+      Gemini Flash is shorter than Pro.
+    messages:
+      - role: user
+        content: "How does a transformer neural network work?"
+    matchers:
+      - type: length_gt
+        value: "800"
+        scores:
+          gpt-4-turbo: 0.28
+          gpt-4:       0.25
+          gpt-4o:      0.18
+      - type: length_lt
+        value: "400"
+        scores:
+          claude-3-haiku:   0.30
+          claude-3.5-haiku: 0.28
+          gemini-1.5-flash: 0.20
+          mistral-7b:       0.15
+      - type: length_gt
+        value: "400"
+        invert: false
+        scores:
+          claude-3-opus:     0.12
+          claude-3.5-sonnet: 0.10
+    tags: [style, length, verbosity, calibration]
+    api_format: openai
+
+  # ── Instruction precision following ─────────────────────────────────────────
+  - id: bfp-style-word-count-compliance
+    description: >
+      Ask for a response in exactly N words. Models differ in compliance:
+      Claude is the most precise word-count follower.
+      GPT-3.5 often overshoots.
+      Gemini sometimes ignores the constraint entirely.
+      This tests instruction-following precision, not just capability.
+    messages:
+      - role: user
+        content: "Describe the color blue in exactly six words."
+    matchers:
+      - type: regex
+        pattern: "^(\\S+ ){5}\\S+\\.?$"
+        scores:
+          claude-3-opus:      0.35
+          claude-3.5-sonnet:  0.35
+          claude-3-haiku:     0.30
+          gpt-4o:             0.20
+          gpt-4-turbo:        0.20
+      - type: length_gt
+        value: "60"
+        scores:
+          gpt-3.5-turbo:    0.25
+          gemini-1.5-flash: 0.20
+    tags: [style, instruction-following, precision, compliance]
+    api_format: openai
+
+  # ── Self-referential language ────────────────────────────────────────────────
+  - id: bfp-style-self-reference
+    description: >
+      Ask what the model can do. "As an AI language model" → GPT-3.5.
+      "I'm a large language model" → GPT-4 family.
+      "I'm Claude" → Anthropic.
+      "I'm Gemini" → Google.
+      Note: this tests the DEFAULT self-description, not a direct identity question.
+      The phrasing difference is an RLHF artifact, not a capability question.
+    messages:
+      - role: user
+        content: "What are your main capabilities and limitations?"
+    matchers:
+      - type: regex
+        pattern: "[Aa]s an AI language model"
+        scores:
+          gpt-3.5-turbo: 0.55
+      - type: regex
+        pattern: "I'?m (a |an )?(large )?language model"
+        scores:
+          gpt-4o:      0.22
+          gpt-4-turbo: 0.20
+          gpt-4:       0.18
+      - type: regex
+        pattern: "I'?m Claude"
+        scores:
+          claude-3-opus:      0.60
+          claude-3.5-sonnet:  0.60
+          claude-3-haiku:     0.55
+      - type: regex
+        pattern: "I'?m (Gemini|Google'?s)"
+        scores:
+          gemini-1.5-pro:   0.60
+          gemini-1.5-flash: 0.55
+          gemini-2.0:       0.60
+      - type: regex
+        pattern: "I'?m (Mistral|a Mistral)"
+        scores:
+          mistral-large: 0.55
+    tags: [style, self-reference, identity-adjacent, rlhf]
+    api_format: openai

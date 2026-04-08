@@ -1,0 +1,188 @@
+# behavioral_tokenization.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# CATEGORY: Tokenization Artifacts & Response Entropy
+#
+# The most covert fingerprinting category. Each model family uses a different
+# tokenizer and has different learned associations with unusual inputs.
+# These patterns are architectural — impossible to suppress through prompting.
+#
+# Key techniques:
+#
+# 1. TOKEN BOUNDARY EFFECTS
+#    Different tokenizers split strings differently. A sequence that is one
+#    token in GPT-4's tiktoken may be three tokens in LLaMA's SentencePiece.
+#    This affects how models "see" and respond to unusual sequences.
+#
+# 2. RESPONSE ENTROPY
+#    On ambiguous/random prompts, models with different temperature defaults
+#    and trained probability distributions give statistically different
+#    responses. We measure variance across a small set of identical prompts.
+#
+# 3. CONTEXT ATTENTION PATTERNS (Lost-in-the-Middle)
+#    Different architectures have different positional attention decay.
+#    Information placed in the MIDDLE of a long context is forgotten more
+#    by some models than others. This is architecture-specific.
+#
+# Sources:
+#   - Liu et al. (2023) "Lost in the Middle" — positional attention paper
+#   - Piktus et al. (2023) — tokenizer fingerprinting
+#   - Wei et al. (2023) — in-context learning differences
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: "Behavioral: Tokenization & Encoding Artifacts"
+provider: generic
+version: "2.0"
+description: >
+  Exploits tokenizer architecture differences and trained probability
+  distributions. These signals are architectural and cannot be suppressed
+  by system prompts or persona instructions.
+
+probes:
+
+  # ── Unusual unicode handling ─────────────────────────────────────────────────
+  - id: bfp-token-unicode-describe
+    description: >
+      Ask the model to describe what it sees in an unusual unicode sequence.
+      Different tokenizers produce different token splits for the same
+      multi-byte sequences, which affects how the model interprets them.
+      The LENGTH and CERTAINTY of the response differs by tokenizer family.
+    messages:
+      - role: user
+        content: "What does this character mean: 🤔? Reply in one sentence."
+    matchers:
+      - type: regex
+        pattern: "(thinking|thought|contemplat|wondering|pondering)"
+        scores:
+          gpt-4o:             0.15
+          gpt-4-turbo:        0.15
+          claude-3-opus:      0.15
+          claude-3.5-sonnet:  0.15
+          gemini-1.5-pro:     0.15
+      - type: regex
+        pattern: "thinking face|thought-provoking"
+        scores:
+          gpt-3.5-turbo: 0.20
+          gpt-4:         0.15
+      - type: regex
+        pattern: "(reflection|reflective|introspect)"
+        scores:
+          claude-3-opus:      0.20
+          claude-3.5-sonnet:  0.18
+    tags: [tokenization, unicode, encoding]
+    api_format: openai
+
+  # ── Word reversal (tokenizer stress test) ──────────────────────────────────
+  - id: bfp-token-reverse-word
+    description: >
+      "Reverse the letters in 'hello'." Should be 'olleh'.
+      GPT-3.5 sometimes fails this when embedded in longer context.
+      Tests character-level attention vs token-level processing.
+      A model that CORRECTLY reverses and a model that gets it wrong are
+      different families.
+    messages:
+      - role: user
+        content: "Reverse the letters in the word 'hello'. Give only the reversed word."
+    matchers:
+      - type: contains
+        value: "olleh"
+        scores:
+          gpt-4o:             0.15
+          gpt-4-turbo:        0.15
+          claude-3-opus:      0.18
+          claude-3.5-sonnet:  0.18
+          claude-3-haiku:     0.15
+          gemini-1.5-pro:     0.15
+          gemini-2.0:         0.15
+          llama-3.x:          0.10
+      - type: not_contains
+        value: "olleh"
+        scores:
+          gpt-3.5-turbo: 0.25
+          mistral-7b:    0.20
+    tags: [tokenization, character-level, reversal]
+    api_format: openai
+
+  # ── Lost-in-the-middle attention test ───────────────────────────────────────
+  - id: bfp-token-context-middle
+    description: >
+      Liu et al. (2023) "Lost in the Middle" showed that most LLMs perform
+      worse when the relevant information is in the MIDDLE of a long context
+      vs. beginning or end. The degree of this effect varies by architecture.
+      We embed a keyword mid-paragraph and test recall.
+      Claude has notably stronger middle-of-context attention than GPT-3.5.
+    messages:
+      - role: user
+        content: "Read this carefully: The capital of France is Paris. Most large cities are expensive to live in. The secret password is ZEPHYR-7734. Cities have been centres of commerce for millennia. Urban planning is a complex discipline involving many stakeholders. Now tell me: what was the secret password mentioned earlier?"
+    matchers:
+      - type: contains
+        value: "ZEPHYR-7734"
+        scores:
+          claude-3-opus:      0.28
+          claude-3.5-sonnet:  0.30
+          claude-3.5-haiku:   0.25
+          gpt-4o:             0.22
+          gpt-4-turbo:        0.20
+          gemini-2.0:         0.25
+          gemini-1.5-pro:     0.20
+          llama-3.x:          0.15
+      - type: not_contains
+        value: "ZEPHYR"
+        scores:
+          gpt-3.5-turbo: 0.25
+          mistral-7b:    0.20
+    tags: [tokenization, attention, context, lost-in-middle]
+    api_format: openai
+
+  # ── Repetition compliance (architectural entropy probe) ─────────────────────
+  - id: bfp-token-single-word
+    description: >
+      Ask for a single specific word response to an ambiguous creative prompt.
+      Compliance rate with precise format instructions differs by model family.
+      The WORD CHOSEN on ambiguous prompts also varies by training distribution.
+    messages:
+      - role: user
+        content: "Complete this sentence with ONE WORD only: 'The ocean is ___'"
+    matchers:
+      - type: regex
+        pattern: "^(vast|deep|blue|beautiful|endless|immense|infinite|magnificent)$"
+        scores:
+          claude-3-opus:      0.22   # Claude prefers precise compliance
+          claude-3.5-sonnet:  0.22
+          claude-3-haiku:     0.20
+          gpt-4o:             0.18
+      - type: length_gt
+        value: "20"
+        scores:
+          gpt-3.5-turbo:    0.25   # GPT-3.5 often ignores "one word"
+          gemini-1.5-flash: 0.20
+    tags: [tokenization, entropy, compliance, one-word]
+    api_format: openai
+
+  # ── Homophone disambiguation (training corpus signal) ───────────────────────
+  - id: bfp-token-homophone
+    description: >
+      "Their, there, or they're — which is correct: '__ are three options'?"
+      Answer: "There". Tests basic English grammar. Most modern models get
+      this right, but the EXPLANATION STYLE is distinctive:
+      GPT-4o explains with examples. Claude answers directly. Gemini
+      sometimes over-explains with a mini-grammar lesson.
+    messages:
+      - role: user
+        content: "Which is grammatically correct: 'Their are three options', 'There are three options', or 'They're are three options'? Reply with just the correct sentence."
+    matchers:
+      - type: contains
+        value: "There are three options"
+        scores:
+          gpt-4o:             0.15
+          claude-3-opus:      0.18
+          claude-3.5-sonnet:  0.18
+          gemini-1.5-pro:     0.15
+          gemini-2.0:         0.15
+          llama-3.x:          0.12
+      - type: length_gt
+        value: "50"
+        scores:
+          gpt-4:          0.12
+          gpt-3.5-turbo:  0.15   # tends to add explanation even when told not to
+    tags: [tokenization, language, grammar, training-corpus]
+    api_format: openai

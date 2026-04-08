@@ -1,0 +1,139 @@
+# openai.yaml — OpenAI-specific fingerprinting probes
+
+name: "OpenAI Provider Probes"
+provider: openai
+version: "1.0"
+description: >
+  Probes targeting the OpenAI API and GPT model family.
+  Uses OpenAI-compatible /v1/chat/completions format.
+
+probes:
+
+  - id: openai-model-reveal-attempt
+    description: >
+      Ask the model to state which version it is.
+      GPT models sometimes reveal partial version info.
+    messages:
+      - role: user
+        content: "What exact version of GPT are you? Please be specific."
+    matchers:
+      - type: regex
+        pattern: "GPT-[34]"
+        scores:
+          gpt-4o:         0.25
+          gpt-4-turbo:    0.25
+          gpt-3.5-turbo:  0.25
+      - type: contains
+        value: "gpt-4o"
+        scores:
+          gpt-4o: 0.50
+      - type: contains
+        value: "gpt-4"
+        scores:
+          gpt-4-turbo: 0.30
+          gpt-4:       0.30
+      - type: contains
+        value: "gpt-3.5"
+        scores:
+          gpt-3.5-turbo: 0.50
+      - type: regex
+        pattern: "I('m| am) (ChatGPT|GPT)"
+        scores:
+          gpt-4o:         0.20
+          gpt-3.5-turbo:  0.20
+    tags: [identity, openai, version]
+    api_format: openai
+
+  - id: openai-training-cutoff
+    description: >
+      Ask about training data cutoff — different GPT versions have different cutoffs.
+    messages:
+      - role: user
+        content: "What is your training data cutoff date? Give only the month and year."
+    matchers:
+      - type: contains
+        value: "2021"
+        scores:
+          gpt-3.5-turbo:  0.30
+      - type: contains
+        value: "2023"
+        scores:
+          gpt-4o:      0.20
+          gpt-4-turbo: 0.20
+      - type: contains
+        value: "April 2023"
+        scores:
+          gpt-4o: 0.35
+      - type: contains
+        value: "January 2022"
+        scores:
+          gpt-3.5-turbo: 0.35
+    tags: [identity, openai, cutoff]
+    api_format: openai
+
+  - id: openai-markdown-default
+    description: >
+      GPT-4 class models aggressively use markdown even when not asked.
+      Claude often asks or adapts. This is a strong OpenAI signal.
+    messages:
+      - role: user
+        content: "Explain recursion in programming in 3 sentences."
+    matchers:
+      - type: regex
+        pattern: "\\*\\*|__"   # Bold markdown
+        scores:
+          gpt-4o:         0.18
+          gpt-4-turbo:    0.18
+          gpt-3.5-turbo:  0.12
+      - type: not_contains
+        value: "**"
+        scores:
+          claude-3-opus:      0.08
+          claude-3.5-sonnet:  0.06
+    tags: [style, openai, markdown]
+    api_format: openai
+
+  - id: openai-o1-reasoning
+    description: >
+      o1 models have a distinctive "reasoning" style and often mention
+      thinking through problems step by step before answering.
+    messages:
+      - role: user
+        content: "A bat and ball cost $1.10 together. The bat costs $1 more than the ball. How much does the ball cost?"
+    matchers:
+      - type: contains
+        value: "5 cents"
+        scores:
+          gpt-4o:     0.18
+          gpt-4-turbo: 0.18
+          o1:         0.25
+          claude-3-opus: 0.18
+          claude-3.5-sonnet: 0.20
+      - type: contains
+        value: "10 cents"
+        scores:
+          gpt-3.5-turbo: 0.25   # Classic wrong answer on System 1 thinking
+    tags: [reasoning, openai, o1]
+    api_format: openai
+
+  - id: openai-function-format-hint
+    description: >
+      GPT-4 class models in function-calling mode have distinctive JSON
+      output for tool use that differs from Claude's tool_use format.
+    messages:
+      - role: user
+        content: "If you could call a function to get the weather in Toronto, what would the function call look like? Show me the JSON."
+    matchers:
+      - type: contains
+        value: "function"
+        scores:
+          gpt-4o:         0.10
+          gpt-4-turbo:    0.10
+          gpt-3.5-turbo:  0.10
+      - type: regex
+        pattern: '"name":\s*"get_weather"'
+        scores:
+          gpt-4o:         0.15
+          gpt-4-turbo:    0.15
+    tags: [tools, openai, function-calling]
+    api_format: openai

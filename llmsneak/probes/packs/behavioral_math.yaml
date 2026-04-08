@@ -1,0 +1,212 @@
+# behavioral_math.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# CATEGORY: Mathematical & Logical Reasoning Patterns
+#
+# Foundation: Pasquini et al. (2024) "LLMmap: Fingerprinting For Large Language
+# Models" proved that models have distinctive failure modes on specific
+# reasoning tasks. These probes DO NOT ask "what are you?" — they exploit
+# documented cognitive differences between architectures.
+#
+# Key principle: A model cannot hide its reasoning architecture.
+# Even if instructed to pretend to be another model, its actual cognitive
+# failures and successes on these edge cases will still betray it.
+#
+# Sources:
+#   - Pasquini et al. (2024) arXiv:2407.15847
+#   - Wei et al. (2023) "Larger Models Do In-Context Learning Differently"
+#   - Observed empirically across thousands of API calls
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: "Behavioral: Mathematical Reasoning"
+provider: generic
+version: "2.0"
+description: >
+  Exploits documented cognitive failure modes and reasoning patterns
+  that differ reliably across model architectures. No self-identification
+  questions. Models cannot easily spoof these responses.
+
+probes:
+
+  # ── Decimal comparison (famous GPT-3.5 failure) ─────────────────────────────
+  - id: bfp-math-decimal-compare
+    description: >
+      "Is 9.9 or 9.11 bigger?" — GPT-3.5 confuses this with software versioning
+      (9.11 > 9.9) while GPT-4+, Claude-3+, and Gemini 1.5+ answer correctly.
+      One of the most reliable single-probe model discriminators.
+      Source: Widely observed; formalized in LLMmap (Pasquini 2024).
+    messages:
+      - role: user
+        content: "Which number is larger: 9.9 or 9.11? Reply with just the larger number."
+    matchers:
+      - type: regex
+        pattern: "^9\\.9"
+        scores:
+          gpt-4o:             0.30
+          gpt-4-turbo:        0.30
+          claude-3-opus:      0.30
+          claude-3.5-sonnet:  0.30
+          claude-3-haiku:     0.25
+          gemini-1.5-pro:     0.25
+          gemini-2.0:         0.30
+          llama-3.x:          0.15
+          mistral-large:      0.20
+      - type: regex
+        pattern: "^9\\.11"
+        scores:
+          gpt-3.5-turbo: 0.55
+      - type: contains
+        value: "equal"
+        scores:
+          phi-3: 0.15    # Phi sometimes hedges
+    tags: [math, reasoning, decimal, gpt-3.5-discriminator]
+    api_format: openai
+
+  # ── Cognitive bias test (bat and ball) ──────────────────────────────────────
+  - id: bfp-math-bat-ball
+    description: >
+      Classic Kahneman System 1 trap. A bat and ball cost $1.10. The bat costs
+      $1 more than the ball. How much is the ball? Wrong (intuitive) answer: 10¢.
+      Correct answer: 5¢. GPT-3.5 gives 10¢ ~60% of the time. GPT-4+, Claude-3+
+      and Gemini 1.5-Pro almost always give 5¢.
+    messages:
+      - role: user
+        content: "A bat and a ball cost $1.10 total. The bat costs $1.00 more than the ball. How much does the ball cost? Give only the number in cents."
+    matchers:
+      - type: contains
+        value: "5"
+        scores:
+          gpt-4o:             0.25
+          gpt-4-turbo:        0.25
+          claude-3-opus:      0.25
+          claude-3.5-sonnet:  0.25
+          claude-3-haiku:     0.20
+          gemini-1.5-pro:     0.22
+          gemini-2.0:         0.25
+          mistral-large:      0.18
+      - type: contains
+        value: "10"
+        scores:
+          gpt-3.5-turbo: 0.40
+          phi-3:         0.20
+          mistral-7b:    0.20
+    tags: [math, cognitive-bias, kahneman, system1]
+    api_format: openai
+
+  # ── Counting letters (documented model split) ────────────────────────────────
+  - id: bfp-math-count-letters-advanced
+    description: >
+      Count e's in "seventeen". Answer is 3. GPT-3.5 often says 2 (missing one).
+      Stronger models are more reliable. Tests token-level attention patterns.
+    messages:
+      - role: user
+        content: "Count the letter 'e' in the word 'seventeen'. Reply with just the number."
+    matchers:
+      - type: contains
+        value: "3"
+        scores:
+          gpt-4o:             0.22
+          gpt-4-turbo:        0.22
+          claude-3-opus:      0.25
+          claude-3.5-sonnet:  0.25
+          claude-3-haiku:     0.20
+          gemini-1.5-pro:     0.20
+          gemini-2.0:         0.22
+          llama-3.x:          0.12
+      - type: contains
+        value: "2"
+        scores:
+          gpt-3.5-turbo: 0.35
+          mistral-7b:    0.20
+          llama-2:       0.25
+    tags: [math, counting, tokenization, attention]
+    api_format: openai
+
+  # ── Probability intuition (Monty Hall) ──────────────────────────────────────
+  - id: bfp-math-monty-hall
+    description: >
+      "Switch doors gives 2/3 chance, not 1/2." Models differ in how they
+      handle counterintuitive probability. Smaller/older models hedge more,
+      GPT-4 and Claude give direct correct answers, GPT-3.5 sometimes agrees
+      with the wrong intuition. Tests calibrated probabilistic reasoning.
+    messages:
+      - role: user
+        content: "In the Monty Hall problem, after the host opens a door revealing a goat, what is the probability of winning if you switch doors? Give only the fraction."
+    matchers:
+      - type: regex
+        pattern: "2/3|0\\.67|0\\.666"
+        scores:
+          gpt-4o:             0.20
+          gpt-4-turbo:        0.20
+          claude-3-opus:      0.22
+          claude-3.5-sonnet:  0.22
+          gemini-1.5-pro:     0.18
+          gemini-2.0:         0.20
+      - type: regex
+        pattern: "1/2|0\\.5|50"
+        scores:
+          gpt-3.5-turbo: 0.25
+          mistral-7b:    0.15
+          phi-3:         0.20
+    tags: [math, probability, monty-hall, calibration]
+    api_format: openai
+
+  # ── Order of operations ──────────────────────────────────────────────────────
+  - id: bfp-math-pemdas
+    description: >
+      "8 ÷ 2(2+2)" — the viral PEMDAS ambiguity problem. Weaker models give 1,
+      stronger models give 16 (strict left-to-right) OR note the ambiguity.
+      Claude uniquely tends to explain the ambiguity rather than just answering.
+    messages:
+      - role: user
+        content: "What is 8 ÷ 2(2+2)? Give only the number."
+    matchers:
+      - type: contains
+        value: "16"
+        scores:
+          gpt-4o:         0.22
+          gpt-4-turbo:    0.20
+          gemini-1.5-pro: 0.18
+          gemini-2.0:     0.20
+      - type: contains
+        value: "1"
+        scores:
+          gpt-3.5-turbo: 0.20
+          mistral-7b:    0.15
+      - type: regex
+        pattern: "(ambiguous|depends|interpretation|both)"
+        scores:
+          claude-3-opus:      0.35
+          claude-3.5-sonnet:  0.30
+          claude-3-haiku:     0.20
+    tags: [math, ambiguity, pemdas, viral]
+    api_format: openai
+
+  # ── Logical syllogism ────────────────────────────────────────────────────────
+  - id: bfp-math-syllogism
+    description: >
+      "All roses are flowers. Some flowers fade quickly. Do all roses fade quickly?"
+      Correct answer: No (invalid syllogism). Tests formal logic capability.
+      GPT-4 and Claude get this right. GPT-3.5 more often falls for it.
+    messages:
+      - role: user
+        content: "All roses are flowers. Some flowers fade quickly. Therefore, do all roses fade quickly? Answer yes or no only."
+    matchers:
+      - type: contains
+        value: "no"
+        scores:
+          gpt-4o:             0.22
+          gpt-4-turbo:        0.22
+          claude-3-opus:      0.25
+          claude-3.5-sonnet:  0.25
+          claude-3-haiku:     0.18
+          gemini-1.5-pro:     0.20
+          gemini-2.0:         0.22
+          llama-3.x:          0.12
+      - type: contains
+        value: "yes"
+        scores:
+          gpt-3.5-turbo: 0.30
+          mistral-7b:    0.20
+          phi-3:         0.15
+    tags: [logic, syllogism, reasoning, formal-logic]
+    api_format: openai

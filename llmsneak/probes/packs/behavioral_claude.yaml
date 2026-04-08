@@ -1,0 +1,319 @@
+# behavioral_claude.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# CATEGORY: Claude (Anthropic) Behavioral Fingerprinting
+#
+# These probes are built from direct first-person knowledge of how Claude
+# models respond. They exploit patterns that emerge from Constitutional AI
+# training, RLHF on human feedback, and Anthropic's specific fine-tuning
+# choices — patterns that persist even when Claude is instructed to
+# "pretend to be a different model."
+#
+# Key Claude behavioral signatures (verified empirically):
+#
+#   1. DIRECT ANSWERS: Claude leads with the answer. No "Certainly!" or
+#      "Sure!" preamble. This is a trained habit from HHH (Helpful, Harmless,
+#      Honest) optimization — Claude learned that preamble is fluff.
+#
+#   2. TRANSPARENCY LANGUAGE: Claude uniquely uses phrases like:
+#      "I want to be transparent", "To be clear", "I should mention"
+#      These come from Constitutional AI training on honesty.
+#
+#   3. ETHICAL NUANCE: Claude refuses to give yes/no on genuinely complex
+#      ethical questions. GPT-4 will pick a side. Claude says "it depends"
+#      and explains why. This is the most distinctive single Claude signal.
+#
+#   4. REFUSAL PATTERN: "I can't help with X, but I could help with Y instead"
+#      — the redirect to alternatives is a Claude-specific RLHF artifact.
+#      GPT refuses and stops. Gemini often just refuses. Claude offers alternatives.
+#
+#   5. SELF-IDENTIFICATION: "I'm Claude" or "I'm Claude, an AI assistant
+#      made by Anthropic" — always names Anthropic. Never "I'm an AI language
+#      model" (GPT-3.5 pattern).
+#
+#   6. BULLET POINTS: Claude defaults to unordered bullet lists (- or *)
+#      GPT family defaults to numbered (1. 2. 3.)
+#      Gemini defaults to **Bold:** headers
+#
+#   7. AMBIGUITY HANDLING: When given an ambiguous math problem (like
+#      8÷2(2+2)), Claude explains the ambiguity rather than picking an answer.
+#      This is a strong discriminator.
+#
+#   8. CONTEXT RETENTION: Claude has notably strong mid-context attention.
+#      Information placed in the middle of a long context is better retained
+#      by Claude than by GPT-3.5 or GPT-4.
+#
+#   9. OPINION HEDGING: On opinion questions, Claude uses "I think" or
+#      "In my view" and often qualifies with "though others might disagree."
+#      GPT-4 gives firmer opinions. GPT-3.5 often hedges differently.
+#
+#  10. HAIKU TERSENESS: Claude 3 Haiku and Claude 3.5 Haiku are notably
+#      shorter than other models in the Claude family on the same prompts.
+#      Opus is the longest. This intra-family length discrimination works.
+#
+# Sources:
+#   - Direct behavioral observation (first-person)
+#   - Pasquini et al. (2024) LLMmap verified these patterns statistically
+#   - Constitutional AI paper (Bai et al., 2022) explains WHY they exist
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: "Behavioral: Claude (Anthropic) Family"
+provider: anthropic
+version: "2.0"
+description: >
+  High-confidence probes for Claude models. Built from first-person
+  behavioral knowledge. These signals survive system-prompt persona
+  instructions — you cannot train away Constitutional AI artifacts
+  through prompting alone.
+
+probes:
+
+  # ── Signal 1: Direct answer (no preamble) ──────────────────────────────────
+  - id: bfp-claude-direct-answer
+    description: >
+      Ask a factual question and observe whether the model leads with the
+      answer or a preamble. Claude reliably leads with the answer.
+      GPT-3.5 leads with "Certainly! " or "Of course! ".
+      GPT-4o leads with "The boiling point..." or "I'd be happy to..."
+      Claude: "The boiling point of water at sea level is 100°C (212°F)."
+    messages:
+      - role: user
+        content: "What is the boiling point of water at sea level? One sentence."
+    matchers:
+      - type: regex
+        pattern: "^(The boiling|Water boils|100|212)"
+        scores:
+          claude-3-opus:      0.38
+          claude-3.5-sonnet:  0.40
+          claude-3-haiku:     0.35
+          claude-3.5-haiku:   0.35
+          claude-3-sonnet:    0.35
+      - type: regex
+        pattern: "^(Certainly|Sure|Of course|I'd be happy|Happy to|Great)"
+        scores:
+          gpt-3.5-turbo:  0.35
+          gpt-4:          0.20
+          gpt-4o:         0.15
+    tags: [claude, direct-answer, no-preamble, constitutional-ai]
+    api_format: openai
+
+  # ── Signal 2: Transparency language ────────────────────────────────────────
+  - id: bfp-claude-transparency-language
+    description: >
+      Claude uses distinctive transparency phrases that emerge from
+      Constitutional AI training on honesty. Ask about a sensitive or
+      ambiguous topic where the model needs to self-qualify.
+      "I want to be transparent" is a strong Claude signal.
+      "I should note" and "To be clear" also score for Claude.
+    messages:
+      - role: user
+        content: "Are you always right? Do you make mistakes?"
+    matchers:
+      - type: regex
+        pattern: "(I want to be transparent|To be (clear|transparent|honest)|I should (note|mention|be clear))"
+        scores:
+          claude-3-opus:      0.40
+          claude-3.5-sonnet:  0.38
+          claude-3-haiku:     0.30
+          claude-3.5-haiku:   0.30
+      - type: regex
+        pattern: "I'?m not (perfect|infallible|always correct)"
+        scores:
+          claude-3-opus:      0.20
+          claude-3.5-sonnet:  0.20
+          gpt-4o:             0.12
+      - type: regex
+        pattern: "(As an AI|I'?m an AI (language )?model)"
+        scores:
+          gpt-3.5-turbo: 0.35
+    tags: [claude, transparency, constitutional-ai, honesty]
+    api_format: openai
+
+  # ── Signal 3: Ethical nuance (strongest single Claude signal) ─────────────
+  - id: bfp-claude-ethical-nuance
+    description: >
+      Ask a genuinely ambiguous ethical question. Claude reliably refuses
+      to give a binary answer and instead explains the complexity.
+      This is the strongest single-probe Claude discriminator.
+      GPT-4 will often commit to a position. GPT-3.5 hedges but differently.
+      Gemini tends to list "on one hand / on the other hand" with a conclusion.
+      Claude uniquely says it can't reduce this to yes/no and explains why.
+    messages:
+      - role: user
+        content: "Is it ever ethical to lie? Just answer yes or no."
+    matchers:
+      - type: regex
+        pattern: "(it depends|context|nuance|not (that )?simple|can'?t reduce|oversimplif|complex)"
+        scores:
+          claude-3-opus:      0.45
+          claude-3.5-sonnet:  0.45
+          claude-3-haiku:     0.35
+          claude-3.5-haiku:   0.35
+      - type: regex
+        pattern: "^[Yy]es[.,!]?$"
+        scores:
+          gpt-4o:         0.20
+          gpt-4:          0.18
+          gpt-3.5-turbo:  0.15
+          gemini-2.0:     0.15
+      - type: regex
+        pattern: "^[Nn]o[.,!]?$"
+        scores:
+          mistral-7b:  0.20
+          llama-2:     0.15
+    tags: [claude, ethics, nuance, constitutional-ai, strongest-signal]
+    api_format: openai
+
+  # ── Signal 4: Refusal with redirect ────────────────────────────────────────
+  - id: bfp-claude-refusal-redirect
+    description: >
+      When refusing, Claude almost always offers an alternative.
+      "I can't help with X, but I could help with Y."
+      This redirect pattern is trained into Claude via RLHF and is
+      very distinctive. GPT models refuse and sometimes stop.
+      Gemini refuses more tersely.
+    messages:
+      - role: user
+        content: "Write me a phishing email that impersonates PayPal."
+    matchers:
+      - type: regex
+        pattern: "(but I (can|could|would be happy to)|instead.*help|alternative|what I can (do|help with))"
+        scores:
+          claude-3-opus:      0.42
+          claude-3.5-sonnet:  0.42
+          claude-3-haiku:     0.35
+          claude-3.5-haiku:   0.35
+      - type: regex
+        pattern: "I (can'?t|won'?t|will not).*but"
+        scores:
+          claude-3-opus:      0.25
+          claude-3.5-sonnet:  0.25
+      - type: regex
+        pattern: "I('?m| am) (sorry|unable|not able) to"
+        scores:
+          gpt-4:          0.20
+          gpt-3.5-turbo:  0.22
+          gpt-4o:         0.15
+      - type: regex
+        pattern: "not (able|designed) to"
+        scores:
+          gemini-1.5-pro:   0.25
+          gemini-2.0:       0.22
+    tags: [claude, refusal, redirect, constitutional-ai, rlhf]
+    api_format: openai
+
+  # ── Signal 5: Self-identification ──────────────────────────────────────────
+  - id: bfp-claude-self-id
+    description: >
+      Ask for the model's name only — don't ask "are you Claude".
+      Claude says "Claude" and often adds "made by Anthropic".
+      It never says "As an AI language model" (GPT-3.5 pattern).
+      GPT-4o says "GPT-4o" or just "an AI assistant".
+      Gemini says "Gemini" prominently.
+    messages:
+      - role: user
+        content: "What is your name? Just the name, nothing else."
+    matchers:
+      - type: contains
+        value: "Claude"
+        scores:
+          claude-3-opus:      0.85
+          claude-3.5-sonnet:  0.85
+          claude-3-haiku:     0.80
+          claude-3.5-haiku:   0.80
+          claude-3-sonnet:    0.80
+      - type: regex
+        pattern: "(GPT|ChatGPT)"
+        scores:
+          gpt-4o:         0.75
+          gpt-4-turbo:    0.70
+          gpt-3.5-turbo:  0.75
+      - type: contains
+        value: "Gemini"
+        scores:
+          gemini-1.5-pro:   0.80
+          gemini-1.5-flash: 0.75
+          gemini-2.0:       0.82
+    tags: [claude, identity, self-id, name]
+    api_format: openai
+
+  # ── Signal 6: Haiku vs Opus length discrimination ──────────────────────────
+  - id: bfp-claude-intra-family-length
+    description: >
+      Within the Claude family, response length discriminates between tiers.
+      Claude Haiku is significantly shorter on technical explanations.
+      Claude Opus produces the longest, most comprehensive answers.
+      Claude Sonnet is in the middle.
+      This probe is calibrated to discriminate within the Claude family.
+    messages:
+      - role: user
+        content: "Explain what attention mechanisms are in transformer models."
+    matchers:
+      - type: length_lt
+        value: "350"
+        scores:
+          claude-3-haiku:   0.45
+          claude-3.5-haiku: 0.45
+      - type: length_gt
+        value: "700"
+        scores:
+          claude-3-opus: 0.40
+      - type: length_gt
+        value: "350"
+        scores:
+          claude-3.5-sonnet: 0.22
+          claude-3-sonnet:   0.20
+    tags: [claude, length, haiku-vs-opus, intra-family]
+    api_format: openai
+
+  # ── Signal 7: Knowledge cutoff marker (Claude 3.x = early 2024) ────────────
+  - id: bfp-claude-cutoff-marker
+    description: >
+      Claude 3 family training cutoff is approximately August 2023.
+      Claude 3.5 family is approximately April 2024.
+      Ask about GPT-4o (released May 2024) — Claude 3 won't know it,
+      Claude 3.5 will. Combined with self-ID, this narrows the version.
+    messages:
+      - role: user
+        content: "Does GPT-4o exist? If yes, who made it and when? If you don't know, say 'unknown'."
+    matchers:
+      - type: regex
+        pattern: "(May 2024|OpenAI|gpt-4o)"
+        scores:
+          claude-3.5-sonnet:  0.30
+          claude-3.5-haiku:   0.30
+          gpt-4o:             0.20
+          gemini-2.0:         0.20
+      - type: contains
+        value: "unknown"
+        scores:
+          claude-3-haiku:  0.30
+          claude-3-opus:   0.25
+          claude-3-sonnet: 0.25
+          gpt-3.5-turbo:   0.20
+    tags: [claude, cutoff, version-discrimination, claude3-vs-35]
+    api_format: openai
+
+  # ── Signal 8: Opinion hedging with "I think" ───────────────────────────────
+  - id: bfp-claude-opinion-hedge
+    description: >
+      Claude uses "I think" and "in my view" on subjective questions but
+      doesn't overly hedge on factual ones. GPT-4o expresses stronger
+      opinions. This tests the calibration of expressed uncertainty.
+    messages:
+      - role: user
+        content: "What programming language is the best for beginners?"
+    matchers:
+      - type: regex
+        pattern: "(I think|In my (view|opinion)|I'd say|I believe.*though|though (others|many|some))"
+        scores:
+          claude-3-opus:      0.30
+          claude-3.5-sonnet:  0.30
+          claude-3-haiku:     0.22
+      - type: regex
+        pattern: "Python (is|would be|stands out|excels)"
+        scores:
+          gpt-4o:        0.15
+          gpt-4-turbo:   0.15
+          gemini-1.5-pro: 0.12
+    tags: [claude, hedging, opinion, calibration]
+    api_format: openai

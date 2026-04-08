@@ -1,0 +1,106 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# llm-sneak docker-compose
+#
+# Usage examples:
+#
+#   # Scan local Ollama
+#   docker compose run --rm scan-ollama
+#
+#   # Scan Groq with your key
+#   GROQ_KEY=gsk_... docker compose run --rm scan-groq
+#
+#   # Scan multiple targets
+#   docker compose run --rm scan-ollama
+#   docker compose run --rm scan-groq
+#
+#   # Build first
+#   docker compose build
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Build image ──────────────────────────────────────────────────────────────
+  llm-sneak:
+    build: .
+    image: llm-sneak:latest
+    environment:
+      - NO_COLOR=${NO_COLOR:-}
+
+  # ── Scan local Ollama ─────────────────────────────────────────────────────────
+  scan-ollama:
+    build: .
+    network_mode: host          # needed to reach localhost:11434 from container
+    command: >
+      -A --model ${OLLAMA_MODEL:-llama3}
+      -oJ /scans/ollama_scan.json
+      http://localhost:11434
+    volumes:
+      - ./scans:/scans
+    profiles: ["ollama"]
+
+  # ── Scan Groq (free LLaMA / Gemma inference) ─────────────────────────────────
+  scan-groq:
+    build: .
+    command: >
+      -A
+      --api-key ${GROQ_KEY:?Set GROQ_KEY env var}
+      --model ${GROQ_MODEL:-llama-3.3-70b-versatile}
+      -oJ /scans/groq_scan.json
+      https://api.groq.com/openai/v1
+    volumes:
+      - ./scans:/scans
+    profiles: ["groq"]
+
+  # ── Scan GitHub Models (GPT-4o, free with GitHub PAT) ────────────────────────
+  scan-github:
+    build: .
+    command: >
+      -sV
+      --api-key ${GITHUB_PAT:?Set GITHUB_PAT env var}
+      --model ${GITHUB_MODEL:-openai/gpt-4o-mini}
+      -oJ /scans/github_scan.json
+      https://models.github.ai/inference
+    volumes:
+      - ./scans:/scans
+    profiles: ["github"]
+
+  # ── Scan OpenRouter (100+ models, some free) ──────────────────────────────────
+  scan-openrouter:
+    build: .
+    command: >
+      -sV
+      --api-key ${OPENROUTER_KEY:?Set OPENROUTER_KEY env var}
+      --model ${OPENROUTER_MODEL:-meta-llama/llama-3.3-70b-instruct:free}
+      -oJ /scans/openrouter_scan.json
+      https://openrouter.ai/api/v1
+    volumes:
+      - ./scans:/scans
+    profiles: ["openrouter"]
+
+  # ── Scan Google Gemini (free tier) ────────────────────────────────────────────
+  scan-gemini:
+    build: .
+    command: >
+      -sV
+      --api-key ${GEMINI_KEY:?Set GEMINI_KEY env var}
+      --model ${GEMINI_MODEL:-gemini-1.5-flash}
+      -oJ /scans/gemini_scan.json
+      https://generativelanguage.googleapis.com
+    volumes:
+      - ./scans:/scans
+    profiles: ["gemini"]
+
+  # ── Scan OpenAI ───────────────────────────────────────────────────────────────
+  scan-openai:
+    build: .
+    command: >
+      -A
+      --api-key ${OPENAI_KEY:?Set OPENAI_KEY env var}
+      --model ${OPENAI_MODEL:-gpt-4o-mini}
+      -oJ /scans/openai_scan.json
+      https://api.openai.com
+    volumes:
+      - ./scans:/scans
+    profiles: ["openai"]
