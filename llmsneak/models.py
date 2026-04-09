@@ -195,6 +195,55 @@ class MCPResult:
 
 
 @dataclass
+class PortResult:
+    """Result for a single port probe."""
+    port:         int
+    host:         str
+    state:        str    = "closed"    # open | closed | filtered | open-llm
+    service:      str    = ""          # e.g. "Ollama", "vLLM", "LM Studio"
+    api_format:   str    = ""          # openai | anthropic | ollama | unknown
+    scheme:       str    = "http"
+    base_url:     str    = ""          # http://host:port — ready to scan
+    latency_ms:   float  = 0.0
+    banner:       str    = ""          # first line of HTTP response or server header
+    is_llm:       bool   = False       # confirmed LLM endpoint (not just an HTTP server)
+    evidence:     list[str] = field(default_factory=list)
+
+    def state_color(self) -> str:
+        return {
+            "open-llm":  "bold green",
+            "open":      "green",
+            "filtered":  "yellow",
+            "closed":    "red",
+        }.get(self.state, "dim")
+
+
+@dataclass
+class PortScanResult:
+    """Aggregated result of the port sweep Phase (Phase 0.5)."""
+    host:         str
+    ports_scanned: int            = 0
+    open_llm_ports: list[PortResult] = field(default_factory=list)
+    open_ports:    list[PortResult]  = field(default_factory=list)   # open but not confirmed LLM
+    duration_ms:   float             = 0.0
+
+    @property
+    def best_target(self) -> Optional[str]:
+        """The most likely LLM base_url to scan — Ollama first, then first open LLM port."""
+        # Prefer Ollama (most featureful metadata)
+        for r in self.open_llm_ports:
+            if "ollama" in r.service.lower() or r.api_format == "ollama":
+                return r.base_url
+        if self.open_llm_ports:
+            return self.open_llm_ports[0].base_url
+        return None
+
+    @property
+    def all_found(self) -> list[PortResult]:
+        return self.open_llm_ports + self.open_ports
+
+
+@dataclass
 class AccessResult:
     """Auth state of the target — determined before any key-based probing."""
     requires_auth:          bool            = True
@@ -210,8 +259,9 @@ class ScanResult:
     target:      str
     scan_start:  float = field(default_factory=time.time)
     scan_end:    float = 0.0
+    port_scan:   Optional["PortScanResult"]   = None       # Phase 0.5 — port discovery
     endpoints:   list[EndpointResult]         = field(default_factory=list)
-    access:      Optional[AccessResult]       = None       # auth state (new — pentest phase 0)
+    access:      Optional[AccessResult]       = None       # Phase 0   — auth state
     provider:    Optional[ProviderResult]     = None
     fingerprint: Optional[ModelFingerprintResult] = None
     capabilities: Optional[CapabilityResult] = None

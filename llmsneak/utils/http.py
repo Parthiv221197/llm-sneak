@@ -19,11 +19,26 @@ DEFAULT_HEADERS = {
 }
 
 
-def build_client(timing: TimingConfig, api_key: Optional[str] = None) -> httpx.AsyncClient:
-    """Build a shared async httpx client for the entire scan."""
+def build_client(
+    timing:     TimingConfig,
+    api_key:    Optional[str] = None,
+    api_format: Optional[str] = None,
+) -> httpx.AsyncClient:
+    """
+    Build a shared async httpx client for the entire scan.
+
+    Auth header selection:
+      Anthropic    → x-api-key: <key>  (NOT Authorization: Bearer)
+      All others   → Authorization: Bearer <key>
+    """
     headers = dict(DEFAULT_HEADERS)
     if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+        if api_format == "anthropic":
+            # Anthropic requires x-api-key and anthropic-version headers
+            headers["x-api-key"] = api_key
+            headers["anthropic-version"] = "2023-06-01"
+        else:
+            headers["Authorization"] = f"Bearer {api_key}"
     return httpx.AsyncClient(
         headers=headers,
         timeout=httpx.Timeout(timing.timeout_s),
@@ -100,7 +115,31 @@ async def chat_completion(
         }
     body.update(kwargs)
 
-    resp, latency, err = await probe_path(client, base_url, path, "POST", body)
+    # Anthropic requires specific headers that may not be on the shared client
+    extra_headers = {}
+    if api_format == "anthropic":
+        # Add Anthropic-required headers if not already present on client
+        if "x-api-key" not in dict(client.headers):
+            # Try to extract key from Authorization header if set
+            auth = dict(client.headers).get("authorization", "")
+            if auth.startswith("Bearer "):
+                extra_headers["x-api-key"] = auth[7:]
+                extra_headers["anthropic-version"] = "2023-06-01"
+
+    if extra_headers:
+        # Send with overridden headers for Anthropic
+        url = base_url.rstrip("/") + path
+        import time as _time
+        start = _time.monotonic()
+        try:
+            resp = await client.post(url, json=body, headers=extra_headers)
+            latency = (_time.monotonic() - start) * 1000
+            err = None
+        except Exception as e:
+            latency = (_time.monotonic() - start) * 1000
+            return None, latency, str(e)
+    else:
+        resp, latency, err = await probe_path(client, base_url, path, "POST", body)
     if err or resp is None:
         return None, latency, err
 

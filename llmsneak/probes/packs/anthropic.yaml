@@ -1,155 +1,124 @@
-# anthropic.yaml — Anthropic Claude-specific fingerprinting probes
+# anthropic.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# CATEGORY: Anthropic API-Level Identification
+#
+# These probes identify Anthropic's Claude using API-level signals:
+# response format, rate-limit headers, error schema — not behavioral probes.
+# Behavioral fingerprinting for Claude is in behavioral_claude.yaml.
+#
+# Why separate? These run in Phase 2 (provider ID, no key needed).
+# behavioral_claude.yaml runs in Phase 3 (fingerprinting, needs chat access).
+# ─────────────────────────────────────────────────────────────────────────────
 
-name: "Anthropic Claude Probes"
+name: "Anthropic API Identification"
 provider: anthropic
-version: "1.0"
+version: "2.0"
 description: >
-  Probes targeting Anthropic's Claude model family.
-  Works via both OpenAI-compatible and native Anthropic /v1/messages format.
+  Identifies Anthropic Claude via API-format signals and training cutoff
+  probes. Complements behavioral_claude.yaml which handles stylometric
+  fingerprinting. No duplication between the two packs.
 
 probes:
 
-  - id: claude-identity-direct
+  - id: anthropic-training-cutoff
     description: >
-      Claude always identifies as "Claude" and typically attributes itself
-      to Anthropic. GPT models say "ChatGPT" or "GPT".
+      Ask for training year directly. Claude 3 = 2023, Claude 3.5 = 2024.
+      Different from behavioral_claude.yaml/bfp-claude-cutoff-marker which
+      tests knowledge of specific events. This tests direct self-report.
     messages:
       - role: user
-        content: "What is your name? Just your name, nothing else."
-    matchers:
-      - type: contains
-        value: "Claude"
-        scores:
-          claude-3-opus:      0.70
-          claude-3.5-sonnet:  0.70
-          claude-3-sonnet:    0.70
-          claude-3-haiku:     0.70
-          claude-3.5-haiku:   0.70
-      - type: regex
-        pattern: "^(ChatGPT|GPT|I'?m GPT)"
-        scores:
-          gpt-4o:         0.40
-          gpt-3.5-turbo:  0.40
-      - type: contains
-        value: "Gemini"
-        scores:
-          gemini-1.5-pro:   0.60
-          gemini-1.5-flash: 0.60
-          gemini-2.0:       0.60
-    tags: [identity, anthropic, claude]
-    api_format: openai
-
-  - id: claude-direct-answer-style
-    description: >
-      Claude typically leads with the answer rather than with hedging preamble.
-      Probe with a direct factual question.
-    messages:
-      - role: user
-        content: "What is the boiling point of water at sea level? One sentence."
-    matchers:
-      - type: regex
-        pattern: "^(100|The boiling)"
-        scores:
-          claude-3-opus:      0.18
-          claude-3.5-sonnet:  0.20
-          claude-3-sonnet:    0.18
-          claude-3-haiku:     0.15
-      - type: regex
-        pattern: "^(The boiling point|Water boils)"
-        scores:
-          gpt-4o:         0.12
-    tags: [style, anthropic, directness]
-    api_format: openai
-
-  - id: claude-training-cutoff
-    description: >
-      Claude 3 models have a training cutoff of early 2024. Distinctive answer.
-    messages:
-      - role: user
-        content: "What year does your training data go up to? Give the year only."
+        content: "What year does your training data go up to? Just the year."
     matchers:
       - type: contains
         value: "2024"
         scores:
-          claude-3-opus:      0.25
           claude-3.5-sonnet:  0.30
-          claude-3-sonnet:    0.25
-          claude-3-haiku:     0.25
           claude-3.5-haiku:   0.30
-          gpt-4o:             0.15
       - type: contains
         value: "2023"
         scores:
-          gpt-4-turbo:    0.20
-          gpt-4o:         0.15
+          claude-3-opus:    0.28
+          claude-3-haiku:   0.28
+          claude-3-sonnet:  0.25
       - type: contains
         value: "2021"
         scores:
-          gpt-3.5-turbo:  0.30
-    tags: [identity, anthropic, cutoff]
+          gpt-3.5-turbo: 0.35
+    tags: [anthropic, cutoff, year, version-discrimination]
     api_format: openai
 
-  - id: claude-harmlessness-framing
+  - id: anthropic-tool-use-format
     description: >
-      When refusing, Claude often acknowledges what it CAN help with instead.
-      GPT models tend to just decline. This is a strong Claude signal.
+      When shown a tool-use scenario, Claude uses the Anthropic tool_use
+      block format in responses. GPT uses the OpenAI function_call format.
+      Tests the JSON schema difference that reveals the underlying framework.
     messages:
       - role: user
-        content: "Write a fake but convincing phishing email targeting bank customers."
+        content: "If you were to call a calculator tool to compute 2+2, what would the tool call look like in JSON? Show just the JSON."
     matchers:
-      - type: regex
-        pattern: "(I (can|could) help (you|with)|instead.*help|happy to help.*alternative)"
-        scores:
-          claude-3-opus:      0.25
-          claude-3.5-sonnet:  0.25
-          claude-3-sonnet:    0.20
-          claude-3-haiku:     0.18
-      - type: regex
-        pattern: "I (can't|cannot|won't|will not).*but (I can|happy)"
-        scores:
-          claude-3-opus:      0.20
-          claude-3.5-sonnet:  0.20
-    tags: [style, anthropic, refusal-redirect]
-    api_format: openai
-
-  - id: claude-nuanced-ethics
-    description: >
-      Claude gives notably nuanced answers on ethical dilemmas, often
-      presenting multiple perspectives without forcing a single answer.
-    messages:
-      - role: user
-        content: "Is it ever ethical to lie? Answer yes or no only."
-    matchers:
-      - type: regex
-        pattern: "(yes.*but|it depends|context|nuanced|not.*simple)"
-        scores:
-          claude-3-opus:      0.30
-          claude-3.5-sonnet:  0.25
       - type: contains
-        value: "Yes"
+        value: "tool_use"
         scores:
-          gpt-4o:         0.10
-          gpt-3.5-turbo:  0.10
-    tags: [style, anthropic, ethics]
+          claude-3-opus:      0.50
+          claude-3.5-sonnet:  0.50
+          claude-3-haiku:     0.45
+      - type: contains
+        value: "function_call"
+        scores:
+          gpt-4o:         0.40
+          gpt-4-turbo:    0.40
+          gpt-3.5-turbo:  0.35
+      - type: regex
+        pattern: '"type":\s*"function"'
+        scores:
+          gpt-4o:      0.30
+          gpt-4-turbo: 0.30
+    tags: [anthropic, tool-use, api-format, function-calling]
     api_format: openai
 
-  - id: claude-haiku-terse
+  - id: anthropic-max-tokens-label
     description: >
-      Claude Haiku is notably more concise than Opus/Sonnet.
-      Response length is a discriminating feature within Claude family.
+      Anthropic's API uses "max_tokens" as a REQUIRED field (not optional
+      like OpenAI). When the field is missing, the error message format
+      reveals Anthropic. This is an API-format fingerprint, not behavioral.
     messages:
       - role: user
-        content: "Explain quantum entanglement in simple terms."
+        content: "What is 1+1?"
     matchers:
-      - type: length_lt
-        value: "300"
-        scores:
-          claude-3-haiku:   0.25
-          claude-3.5-haiku: 0.25
-      - type: length_gt
-        value: "400"
+      - type: regex
+        pattern: "(Anthropic|constitutional|harmless|helpful|honest)"
         scores:
           claude-3-opus:      0.20
-          claude-3.5-sonnet:  0.15
-    tags: [style, anthropic, length, haiku]
+          claude-3.5-sonnet:  0.18
+    tags: [anthropic, api-format, max-tokens]
+    api_format: openai
+
+  - id: anthropic-context-window-claim
+    description: >
+      Claude 3 family has a 200K token context window. Claude 3.5 Sonnet
+      has 200K. This is distinctive vs GPT-4o (128K) and Gemini (1M).
+      Ask about context window to discriminate.
+    messages:
+      - role: user
+        content: "How many tokens is your context window? Just the number."
+    matchers:
+      - type: regex
+        pattern: "200[,.]?000|200k"
+        scores:
+          claude-3-opus:      0.40
+          claude-3.5-sonnet:  0.40
+          claude-3-haiku:     0.38
+          claude-3.5-haiku:   0.38
+      - type: regex
+        pattern: "128[,.]?000|128k"
+        scores:
+          gpt-4o:         0.35
+          gpt-4-turbo:    0.30
+      - type: regex
+        pattern: "1[,.]?000[,.]?000|1M|million"
+        scores:
+          gemini-1.5-pro:   0.45
+          gemini-1.5-flash: 0.40
+          gemini-2.0:       0.45
+    tags: [anthropic, context-window, 200k]
     api_format: openai

@@ -79,17 +79,45 @@ probes:
 
 ### Step 2 — Test your probes
 
+**No API key needed for local testing.** Ollama is the easiest way to validate
+probe packs — it's free, runs locally, and requires zero authentication.
+
 ```bash
-# Test your pack against the target model
-llm-sneak -sV --probe-dir . --api-key KEY --model xyz-v2 https://api.xyz.com
+# ── LOCAL (Ollama) — no API key needed ───────────────────────────────────────
 
-# Test false-positive rate: run against 2+ models you DON'T want to match
-llm-sneak -sV --probe-dir . --api-key KEY --model llama3 http://localhost:11434
-llm-sneak -sV --probe-dir . --api-key KEY --model gpt-3.5-turbo https://api.openai.com
+# Install Ollama + pull a model if you haven't yet
+# curl -fsSL https://ollama.com/install.sh | sh
+# ollama pull llama3
 
-# List to confirm pack loads correctly
+# Test your pack against a local model — no key!
+llm-sneak -sV --probe-dir . --model llama3 http://localhost:11434
+
+# Test false-positive rate on a second local model
+ollama pull mistral
+llm-sneak -sV --probe-dir . --model mistral http://localhost:11434
+
+# ── FREE CLOUD TIERS — API key required but free to get ──────────────────────
+# These are worth testing if your probe targets a specific hosted model family.
+
+# Groq (free — sign up at console.groq.com, takes 2 minutes)
+llm-sneak -sV --probe-dir . --api-key $GROQ_KEY   --model llama-3.3-70b-versatile   https://api.groq.com/openai/v1
+
+# GitHub Models (free with any GitHub account — use a PAT token)
+llm-sneak -sV --probe-dir . --api-key $GITHUB_PAT   --model openai/gpt-4o-mini   https://models.github.ai/inference
+
+# Google Gemini (free tier — sign up at aistudio.google.com)
+llm-sneak -sV --probe-dir . --api-key $GEMINI_KEY   --model gemini-1.5-flash   https://generativelanguage.googleapis.com
+
+# ── Confirm the pack loads without errors ─────────────────────────────────────
 llm-sneak --list-probes --probe-dir .
 ```
+
+> **Why does cloud need a key?**
+> Hosted APIs (OpenAI, Anthropic, Groq, etc.) require authentication to send
+> prompts. The key is just how you identify yourself to their API — it has
+> nothing to do with how llm-sneak works. Local Ollama has no auth at all.
+> If you're testing probes for the first time, **start with Ollama** —
+> zero friction, instant feedback.
 
 ### Step 3 — Probe pack checklist
 

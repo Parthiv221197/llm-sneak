@@ -22,52 +22,61 @@ from llmsneak.probes.loader import list_packs
 
 EPILOG = f"""
 EXAMPLES:
-  Basic endpoint discovery (no API key needed):
-    llmsneak https://api.openai.com
-    llmsneak http://localhost:11434              # Ollama local instance
+  Automatic LLM port discovery — no port needed:
+    llm-sneak 10.0.0.50                          # scans all known LLM ports
+    llm-sneak gpu-server.local                   # finds LLM on any port
+    llm-sneak 192.168.1.100 -A                   # find + full scan
+
+  With known port (skips port scan — faster):
+    llm-sneak https://api.openai.com
+    llm-sneak http://localhost:11434              # Ollama
+
+  Scan specific ports only:
+    llm-sneak --scan-ports 11434,8080 10.0.0.50
+    llm-sneak --no-port-scan http://10.0.0.50:8000  # skip scan entirely
 
   Provider identification + endpoint discovery:
-    llmsneak -sn https://api.example.com
+    llm-sneak -sn https://api.example.com
 
   Model version detection (requires API key):
-    llmsneak -sV --api-key sk-... https://api.openai.com
+    llm-sneak -sV --api-key sk-... https://api.openai.com
 
   Aggressive scan — all phases:
-    llmsneak -A --api-key sk-... https://api.openai.com
+    llm-sneak -A --api-key sk-... https://api.openai.com
 
   Target a specific model:
-    llmsneak -A --api-key sk-... --model gpt-4o https://api.openai.com
+    llm-sneak -A --api-key sk-... --model gpt-4o https://api.openai.com
 
   Run specific scripts only:
-    llmsneak --script guards --api-key sk-... https://api.openai.com
-    llmsneak --script capabilities,guards --api-key sk-... https://api.openai.com
-    llmsneak --script all --api-key sk-... https://api.openai.com
+    llm-sneak --script guards --api-key sk-... https://api.openai.com
+    llm-sneak --script capabilities,guards --api-key sk-... https://api.openai.com
+    llm-sneak --script all --api-key sk-... https://api.openai.com
 
   MCP / agent tool detection:
     llm-sneak --script mcp --model llama3 http://localhost:11434
     llm-sneak --script mcp https://api.example.com
 
   LLM vulnerability scan (OWASP LLM Top 10):
-    llmsneak --script vuln --api-key sk-... https://api.openai.com
-    llmsneak --script vuln --api-key none http://localhost:11434  # Ollama
+    llm-sneak --script vuln --api-key sk-... https://api.openai.com
+    llm-sneak --script vuln --api-key none http://localhost:11434  # Ollama
 
   Ollama local scan (no key required):
-    llmsneak -A http://localhost:11434
-    llmsneak -sV --model llama3 http://localhost:11434
+    llm-sneak -A http://localhost:11434
+    llm-sneak -sV --model llama3 http://localhost:11434
 
   Custom paths only:
-    llmsneak -p /v1/chat/completions,/v1/models https://api.example.com
+    llm-sneak -p /v1/chat/completions,/v1/models https://api.example.com
 
   Timing control:
-    llmsneak -T1 -sV https://api.example.com    # Sneaky (slow)
-    llmsneak -T5 -sV https://api.example.com    # Insane (fast)
+    llm-sneak -T1 -sV https://api.example.com    # Sneaky (slow)
+    llm-sneak -T5 -sV https://api.example.com    # Insane (fast)
 
   Save all output formats:
-    llmsneak -A -oA results --api-key sk-... https://api.openai.com
-    llmsneak -A -oJ scan.json --api-key sk-... https://api.openai.com
+    llm-sneak -A -oA results --api-key sk-... https://api.openai.com
+    llm-sneak -A -oJ scan.json --api-key sk-... https://api.openai.com
 
   List available probe packs:
-    llmsneak --list-probes
+    llm-sneak --list-probes
 
 TIMING TEMPLATES:
   -T0  Paranoid   (1 req, 2000ms delay, 30s timeout) — IDS evasion
@@ -78,14 +87,15 @@ TIMING TEMPLATES:
   -T5  Insane    (10 req,    0ms delay,  5s timeout)  — fast, noisy
 
 SCAN PHASE SUMMARY:
+  Phase 0.5 Port Discovery         auto-runs when no port specified — finds the LLM
+  Phase 0  Access Assessment        always runs (auth check — no key needed)
   Phase 1  Endpoint Discovery       always runs
   Phase 2  Provider Identification  skipped with -sn
   Phase 3  Model Fingerprinting     -sV or -A
   Phase 4  Capability Enumeration   --script capabilities or -A
   Phase 5  Guard Detection          --script guards or -A
-  Phase 6  Vulnerability Scan        --script vuln or -A  (OWASP LLM Top 10)
-  Phase 7  MCP & Tool Detection      --script mcp or -A   (agent attack surface)
-  Phase 7  MCP & Tool Detection      --script mcp  or -A  (agent attack surface)
+  Phase 6  Vulnerability Scan       --script vuln or -A  (OWASP LLM Top 10)
+  Phase 7  MCP & Tool Detection     --script mcp  or -A  (agent attack surface)
 
 See {HOMEPAGE} for full documentation and probe pack authoring guide.
 """
@@ -169,6 +179,20 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="MODEL",
         default=None,
         help="Specify the target model name (e.g. gpt-4o, llama3, claude-3-haiku-20240307)",
+    )
+    auth.add_argument(
+        "--no-port-scan",
+        action="store_true",
+        default=False,
+        dest="no_port_scan",
+        help="Skip port scan (use when you know the port and want faster results)",
+    )
+    auth.add_argument(
+        "--scan-ports",
+        metavar="PORTS",
+        default=None,
+        dest="scan_ports",
+        help="Override ports to scan (comma-separated, e.g. 11434,8080,8000)",
     )
     auth.add_argument(
         "--profile",

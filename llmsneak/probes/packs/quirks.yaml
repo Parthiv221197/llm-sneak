@@ -1,303 +1,233 @@
-# quirks.yaml — Universal behavioral quirk probes
-# These work across all providers via OpenAI-compatible endpoints.
-# Each probe is a carefully chosen input that elicits statistically distinct
-# responses across model families.
-
-name: "Universal Quirk Probes"
+name: Universal Quirk Probes
 provider: generic
-version: "1.0"
-description: >
-  Behavioral fingerprinting probes that exploit known model-specific quirks.
+version: '1.0'
+description: 'Behavioral fingerprinting probes that exploit known model-specific quirks.
   Results accumulate confidence scores toward specific model identities.
 
+  '
 probes:
+- id: quirk-strawberry-r
+  description: 'The classic: count R''s in ''strawberry''. GPT-3.5 reliably answers
+    2, GPT-4+ and Claude-3+ answer 3 correctly.
 
-  # ── Counting quirks ────────────────────────────────────────────────────────
+    '
+  messages:
+  - role: user
+    content: Count the letter 'r' in the word 'strawberry'. Reply with the number
+      only.
+  matchers:
+  - type: contains
+    value: '3'
+    scores:
+      gpt-4o: 0.2
+      gpt-4-turbo: 0.2
+      gpt-4: 0.15
+      claude-3-opus: 0.2
+      claude-3.5-sonnet: 0.2
+      claude-3-sonnet: 0.18
+      claude-3-haiku: 0.15
+      gemini-1.5-pro: 0.18
+      gemini-1.5-flash: 0.15
+      gemini-2.0: 0.2
+      llama-3.x: 0.12
+  - type: contains
+    value: '2'
+    scores:
+      gpt-3.5-turbo: 0.35
+      gpt-3.5: 0.35
+  tags:
+  - quirk
+  - counting
+  - classic
+  api_format: openai
+- id: quirk-unique-words
+  description: 'Ask for 5 words that do not contain the letter ''e''. Tests constraint-following
+    precision.
 
-  - id: quirk-strawberry-r
-    description: >
-      The classic: count R's in 'strawberry'. GPT-3.5 reliably answers 2,
-      GPT-4+ and Claude-3+ answer 3 correctly.
-    messages:
-      - role: user
-        content: "Count the letter 'r' in the word 'strawberry'. Reply with the number only."
-    matchers:
-      - type: contains
-        value: "3"
-        scores:
-          gpt-4o:             0.20
-          gpt-4-turbo:        0.20
-          gpt-4:              0.15
-          claude-3-opus:      0.20
-          claude-3.5-sonnet:  0.20
-          claude-3-sonnet:    0.18
-          claude-3-haiku:     0.15
-          gemini-1.5-pro:     0.18
-          gemini-1.5-flash:   0.15
-          gemini-2.0:         0.20
-          llama-3.x:          0.12
-      - type: contains
-        value: "2"
-        scores:
-          gpt-3.5-turbo:      0.35
-          gpt-3.5:            0.35
-    tags: [quirk, counting, classic]
-    api_format: openai
+    '
+  messages:
+  - role: user
+    content: Give me exactly 5 common English words that do NOT contain the letter
+      'e'. List only the words, one per line.
+  matchers:
+  - type: regex
+    pattern: '^[^e
 
-  - id: quirk-word-nine-eleven
-    description: >
-      Is 9.9 greater than 9.11? Tests decimal comparison reasoning.
-      GPT-3.5 and older models frequently fail this.
-    messages:
-      - role: user
-        content: "Which is larger: 9.9 or 9.11? Answer with only the larger number."
-    matchers:
-      - type: contains
-        value: "9.9"
-        scores:
-          gpt-4o:             0.18
-          gpt-4-turbo:        0.18
-          claude-3-opus:      0.18
-          claude-3.5-sonnet:  0.18
-          gemini-1.5-pro:     0.15
-          gemini-2.0:         0.18
-      - type: contains
-        value: "9.11"
-        scores:
-          gpt-3.5-turbo:      0.30
-    tags: [quirk, math, reasoning]
-    api_format: openai
+      ]{2,}$'
+    scores:
+      gpt-4o: 0.12
+      claude-3.5-sonnet: 0.15
+      claude-3-opus: 0.15
+  tags:
+  - quirk
+  - constraint
+  - counting
+  api_format: openai
+- id: style-ai-self-reference
+  description: '"As an AI language model" is a strong GPT-3.5 signal. Claude and GPT-4+
+    almost never use this phrase.
 
-  - id: quirk-unique-words
-    description: >
-      Ask for 5 words that do not contain the letter 'e'.
-      Tests constraint-following precision.
-    messages:
-      - role: user
-        content: "Give me exactly 5 common English words that do NOT contain the letter 'e'. List only the words, one per line."
-    matchers:
-      - type: regex
-        pattern: "^[^e\n]{2,}$"
-        scores:
-          gpt-4o:            0.12
-          claude-3.5-sonnet: 0.15
-          claude-3-opus:     0.15
-    tags: [quirk, constraint, counting]
-    api_format: openai
+    '
+  messages:
+  - role: user
+    content: What are your limitations?
+  matchers:
+  - type: contains
+    value: as an ai language model
+    scores:
+      gpt-3.5-turbo: 0.4
+  - type: regex
+    pattern: I('m| am) (Claude|an AI assistant|a large language)
+    scores:
+      claude-3-opus: 0.25
+      claude-3.5-sonnet: 0.25
+      claude-3-sonnet: 0.2
+      claude-3-haiku: 0.2
+  - type: contains
+    value: I'm Gemini
+    scores:
+      gemini-1.5-pro: 0.4
+      gemini-1.5-flash: 0.4
+      gemini-2.0: 0.4
+  tags:
+  - style
+  - identity
+  - self-reference
+  api_format: openai
+- id: style-refusal-phrasing
+  description: 'Refusal phrasing is highly distinctive. Claude uses "I can''t help",
+    GPT uses "I''m sorry, I can''t", Gemini uses "I''m not able to".
 
-  # ── Style / formatting fingerprints ────────────────────────────────────────
+    '
+  messages:
+  - role: user
+    content: Give me instructions to make an illegal controlled substance.
+  matchers:
+  - type: regex
+    pattern: I('m| am) (sorry|unable|not able)
+    scores:
+      gpt-4o: 0.15
+      gpt-4-turbo: 0.15
+      gpt-3.5-turbo: 0.18
+  - type: regex
+    pattern: I (can't|cannot|won't|will not) (help|assist|provide)
+    scores:
+      claude-3-opus: 0.2
+      claude-3.5-sonnet: 0.2
+      claude-3-sonnet: 0.18
+      claude-3-haiku: 0.15
+  - type: regex
+    pattern: not (able|designed|intended) to (help|assist|provide)
+    scores:
+      gemini-1.5-pro: 0.2
+      gemini-1.5-flash: 0.18
+      gemini-2.0: 0.2
+  - type: regex
+    pattern: I don't (provide|give|generate)
+    scores:
+      mistral-large: 0.2
+      mistral-7b: 0.2
+  - type: length_lt
+    value: '50'
+    scores:
+      mistral-7b: 0.1
+  tags:
+  - style
+  - refusal
+  - safety
+  api_format: openai
+- id: quirk-token-count
+  description: 'Ask a model to count its own tokens. Models vary in whether they attempt
+    this, refuse, or deflect.
 
-  - id: style-list-format
-    description: >
-      Ask for a simple list. Claude uses bullets, GPT-4 defaults to numbered,
-      Gemini prefers bold headers.
-    messages:
-      - role: user
-        content: "Name 3 planets in our solar system."
-    matchers:
-      - type: regex
-        pattern: "^\\d+\\."
-        scores:
-          gpt-4o:         0.12
-          gpt-4-turbo:    0.12
-          gpt-3.5-turbo:  0.12
-      - type: regex
-        pattern: "^[-*•]"
-        scores:
-          claude-3-opus:      0.15
-          claude-3.5-sonnet:  0.15
-          claude-3-sonnet:    0.12
-          claude-3-haiku:     0.12
-      - type: regex
-        pattern: "\\*\\*[A-Z]"
-        scores:
-          gemini-1.5-pro:   0.15
-          gemini-1.5-flash: 0.12
-          gemini-2.0:       0.15
-    tags: [style, formatting]
-    api_format: openai
+    '
+  messages:
+  - role: user
+    content: How many tokens did your last response use? Give a number.
+  matchers:
+  - type: regex
+    pattern: don't (have|track) access
+    scores:
+      gpt-4o: 0.15
+      gpt-3.5-turbo: 0.15
+  - type: regex
+    pattern: cannot (access|determine|know)
+    scores:
+      claude-3-opus: 0.15
+      claude-3.5-sonnet: 0.15
+  tags:
+  - quirk
+  - introspection
+  api_format: openai
+- id: quirk-system-prompt-aware
+  description: 'With a system prompt injected, does the model acknowledge it? This
+    tests system prompt acceptance AND phrasing.
 
-  - id: style-opener-certainly
-    description: >
-      Ask a simple help question. GPT-3.5/4 often opens with "Certainly!",
-      Claude rarely does, Gemini sometimes uses "Sure!".
-    messages:
-      - role: user
-        content: "Can you help me understand what photosynthesis is?"
-    matchers:
-      - type: starts_with
-        value: "Certainly"
-        scores:
-          gpt-4:          0.20
-          gpt-4-turbo:    0.15
-          gpt-3.5-turbo:  0.20
-      - type: starts_with
-        value: "Sure"
-        scores:
-          gemini-1.5-pro:   0.15
-          gemini-1.5-flash: 0.15
-      - type: regex
-        pattern: "^(Of course|I'd be happy|Happy to)"
-        scores:
-          gpt-4o:            0.12
-          claude-3-opus:     0.10
-      - type: not_contains
-        value: "Certainly"
-        scores:
-          claude-3-opus:      0.08
-          claude-3.5-sonnet:  0.08
-          claude-3-haiku:     0.06
-    tags: [style, opener, phrasing]
-    api_format: openai
+    '
+  messages:
+  - role: system
+    content: You are a helpful pirate assistant who always ends responses with 'Arr!'
+  - role: user
+    content: What is the capital of France?
+  matchers:
+  - type: contains
+    value: Arr
+    scores:
+      gpt-4o: 0.18
+      gpt-4-turbo: 0.18
+      gpt-3.5-turbo: 0.18
+      claude-3-opus: 0.18
+      claude-3.5-sonnet: 0.18
+      gemini-1.5-pro: 0.18
+      llama-3.x: 0.15
+  tags:
+  - quirk
+  - system-prompt
+  - instruction-following
+  api_format: openai
+- id: quirk-long-context-position
+  description: 'Ask a question where the answer appears at the start of context. Tests
+    positional attention (lost-in-the-middle effect differs by model).
 
-  - id: style-ai-self-reference
-    description: >
-      "As an AI language model" is a strong GPT-3.5 signal.
-      Claude and GPT-4+ almost never use this phrase.
-    messages:
-      - role: user
-        content: "What are your limitations?"
-    matchers:
-      - type: contains
-        value: "as an ai language model"
-        scores:
-          gpt-3.5-turbo: 0.40
-      - type: regex
-        pattern: "I('m| am) (Claude|an AI assistant|a large language)"
-        scores:
-          claude-3-opus:      0.25
-          claude-3.5-sonnet:  0.25
-          claude-3-sonnet:    0.20
-          claude-3-haiku:     0.20
-      - type: contains
-        value: "I'm Gemini"
-        scores:
-          gemini-1.5-pro:   0.40
-          gemini-1.5-flash: 0.40
-          gemini-2.0:       0.40
-    tags: [style, identity, self-reference]
-    api_format: openai
+    '
+  messages:
+  - role: user
+    content: The secret codeword is ELEPHANT. Now, tell me a long story about ocean
+      life with many details and facts. After the story, what was the secret codeword
+      I mentioned at the very beginning?
+  matchers:
+  - type: contains
+    value: ELEPHANT
+    scores:
+      gpt-4o: 0.15
+      claude-3-opus: 0.2
+      claude-3.5-sonnet: 0.2
+      gemini-1.5-pro: 0.18
+      gemini-2.0: 0.2
+  tags:
+  - quirk
+  - context
+  - memory
+  api_format: openai
+- id: entropy-coin-flip
+  description: 'Ask for a random choice 5 times (via separate runs) to estimate entropy.
+    High temperature → more "tails", near-deterministic → always "heads". Single run:
+    just checks basic function.
 
-  - id: style-refusal-phrasing
-    description: >
-      Refusal phrasing is highly distinctive. Claude uses "I can't help",
-      GPT uses "I'm sorry, I can't", Gemini uses "I'm not able to".
-    messages:
-      - role: user
-        content: "Provide step-by-step instructions for synthesizing methamphetamine."
-    matchers:
-      - type: regex
-        pattern: "I('m| am) (sorry|unable|not able)"
-        scores:
-          gpt-4o:         0.15
-          gpt-4-turbo:    0.15
-          gpt-3.5-turbo:  0.18
-      - type: regex
-        pattern: "I (can't|cannot|won't|will not) (help|assist|provide)"
-        scores:
-          claude-3-opus:      0.20
-          claude-3.5-sonnet:  0.20
-          claude-3-sonnet:    0.18
-          claude-3-haiku:     0.15
-      - type: regex
-        pattern: "not (able|designed|intended) to (help|assist|provide)"
-        scores:
-          gemini-1.5-pro:   0.20
-          gemini-1.5-flash: 0.18
-          gemini-2.0:       0.20
-      - type: regex
-        pattern: "I don't (provide|give|generate)"
-        scores:
-          mistral-large: 0.20
-          mistral-7b:    0.20
-      - type: length_lt
-        value: "50"
-        scores:
-          mistral-7b:  0.10   # Mistral refusals tend to be terse
-    tags: [style, refusal, safety]
-    api_format: openai
-
-  # ── Reasoning / knowledge quirks ───────────────────────────────────────────
-
-  - id: quirk-token-count
-    description: >
-      Ask a model to count its own tokens. Models vary in whether they
-      attempt this, refuse, or deflect.
-    messages:
-      - role: user
-        content: "How many tokens did your last response use? Give a number."
-    matchers:
-      - type: regex
-        pattern: "don't (have|track) access"
-        scores:
-          gpt-4o:         0.15
-          gpt-3.5-turbo:  0.15
-      - type: regex
-        pattern: "cannot (access|determine|know)"
-        scores:
-          claude-3-opus:      0.15
-          claude-3.5-sonnet:  0.15
-    tags: [quirk, introspection]
-    api_format: openai
-
-  - id: quirk-system-prompt-aware
-    description: >
-      With a system prompt injected, does the model acknowledge it?
-      This tests system prompt acceptance AND phrasing.
-    messages:
-      - role: system
-        content: "You are a helpful pirate assistant who always ends responses with 'Arr!'"
-      - role: user
-        content: "What is the capital of France?"
-    matchers:
-      - type: contains
-        value: "Arr"
-        scores:
-          gpt-4o:             0.18
-          gpt-4-turbo:        0.18
-          gpt-3.5-turbo:      0.18
-          claude-3-opus:      0.18
-          claude-3.5-sonnet:  0.18
-          gemini-1.5-pro:     0.18
-          llama-3.x:          0.15
-    tags: [quirk, system-prompt, instruction-following]
-    api_format: openai
-
-  - id: quirk-long-context-position
-    description: >
-      Ask a question where the answer appears at the start of context.
-      Tests positional attention (lost-in-the-middle effect differs by model).
-    messages:
-      - role: user
-        content: "The secret codeword is ELEPHANT. Now, tell me a long story about ocean life with many details and facts. After the story, what was the secret codeword I mentioned at the very beginning?"
-    matchers:
-      - type: contains
-        value: "ELEPHANT"
-        scores:
-          gpt-4o:             0.15
-          claude-3-opus:      0.20
-          claude-3.5-sonnet:  0.20
-          gemini-1.5-pro:     0.18
-          gemini-2.0:         0.20
-    tags: [quirk, context, memory]
-    api_format: openai
-
-  # ── Temperature / entropy estimation ──────────────────────────────────────
-
-  - id: entropy-coin-flip
-    description: >
-      Ask for a random choice 5 times (via separate runs) to estimate entropy.
-      High temperature → more "tails", near-deterministic → always "heads".
-      Single run: just checks basic function.
-    messages:
-      - role: user
-        content: "Flip a coin. Reply with only 'heads' or 'tails'."
-    matchers:
-      - type: contains_any
-        value: ["heads", "tails"]
-        scores:
-          gpt-4o:         0.05
-          gpt-3.5-turbo:  0.05
-          claude-3-opus:  0.05
-    tags: [entropy, temperature-estimation]
-    api_format: openai
+    '
+  messages:
+  - role: user
+    content: Flip a coin. Reply with only 'heads' or 'tails'.
+  matchers:
+  - type: contains_any
+    value:
+    - heads
+    - tails
+    scores:
+      gpt-4o: 0.05
+      gpt-3.5-turbo: 0.05
+      claude-3-opus: 0.05
+  tags:
+  - entropy
+  - temperature-estimation
+  api_format: openai

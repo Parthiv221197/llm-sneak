@@ -10,6 +10,65 @@ HOMEPAGE  = "https://github.com/Parthiv221197/llm-sneak"
 # ---------------------------------------------------------------------------
 # Endpoint paths to probe  (path, service_label)
 # ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# LLM_PORTS — every port a language model server is likely to use
+#
+# Structure: port → (service_name, api_format_hint, default_scheme)
+#
+# Used by Phase 0.5 (port scan) when no port is given in the target URL.
+# Sorted by probability of finding an LLM — most common first.
+# ─────────────────────────────────────────────────────────────────────────────
+
+LLM_PORTS: dict[int, tuple[str, str, str]] = {
+    # ── Most common local model servers ───────────────────────────────────────
+    11434: ("Ollama",              "ollama",  "http"),
+    1234:  ("LM Studio",           "openai",  "http"),
+    1337:  ("Jan AI",              "openai",  "http"),
+    8000:  ("vLLM / FastAPI",      "openai",  "http"),
+    8080:  ("llama.cpp / TGI",     "openai",  "http"),
+    # ── Secondary local ports ─────────────────────────────────────────────────
+    5000:  ("tabbyAPI",            "openai",  "http"),
+    5001:  ("Kobold.cpp",          "openai",  "http"),
+    5005:  ("OpenedAI",            "openai",  "http"),
+    7860:  ("Gradio / HuggingFace","openai",  "http"),
+    7861:  ("Gradio alt",          "openai",  "http"),
+    8001:  ("vLLM alt port",       "openai",  "http"),
+    8002:  ("Triton HTTP",         "openai",  "http"),
+    8081:  ("TGI alt port",        "openai",  "http"),
+    8888:  ("TGI / Jupyter",       "openai",  "http"),
+    9000:  ("LocalAI",             "openai",  "http"),
+    9997:  ("Xinference",          "openai",  "http"),
+    # ── Agent / MCP servers ───────────────────────────────────────────────────
+    3000:  ("MCP Server",          "mcp",     "http"),
+    3001:  ("AnythingLLM",         "openai",  "http"),
+    4000:  ("LiteLLM proxy",       "openai",  "http"),
+    # ── Production reverse-proxied endpoints ─────────────────────────────────
+    443:   ("HTTPS proxy",         "openai",  "https"),
+    80:    ("HTTP proxy",          "openai",  "http"),
+    8443:  ("HTTPS alt",           "openai",  "https"),
+}
+
+# Ordered list for scanning — most likely LLM ports first
+LLM_PORT_SCAN_ORDER: list[int] = [
+    11434, 1234, 8000, 8080, 1337, 5001, 7860, 8001,
+    8888, 9000, 3001, 5000, 5005, 4000, 3000, 7861,
+    8081, 8002, 9997, 443, 80, 8443,
+]
+
+# Quick probe paths — try these to confirm an LLM is actually running
+# (not just any web server on these ports)
+LLM_PROBE_PATHS: list[tuple[str, str]] = [
+    ("/api/tags",              "Ollama model list"),
+    ("/api/version",           "Ollama version"),
+    ("/v1/models",             "OpenAI-compat model list"),
+    ("/v1/chat/completions",   "OpenAI-compat chat"),
+    ("/health",                "health check"),
+    ("/healthz",               "health check alt"),
+    ("/v1/messages",           "Anthropic messages"),
+    ("/api/generate",          "Ollama generate"),
+]
+
+
 KNOWN_ENDPOINTS: list[tuple[str, str]] = [
     # ── OpenAI / OpenAI-compatible ──────────────────────────────────────────
     ("/v1/chat/completions",        "llm-chat"),

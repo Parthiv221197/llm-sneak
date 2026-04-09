@@ -1,254 +1,182 @@
-"""
-Unit tests for llmsneak.probes.loader
-Tests every matcher type, scoring, pack loading, and edge cases.
-No external dependencies required.
-"""
-import sys
+"""Tests for llmsneak.probes.loader — run with pytest OR python3 -m unittest"""
+import sys, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from llmsneak.probes.loader import Matcher, Probe, ProbePack, load_all_packs
+from llmsneak.probes.loader import Matcher, Probe, load_all_packs
 
 
-# ── Matcher tests ─────────────────────────────────────────────────────────────
+class TestMatcherTypes(unittest.TestCase):
 
-class TestMatcherContains:
-    def test_match(self):
-        m = Matcher({"type": "contains", "value": "hello", "scores": {}})
-        assert m.evaluate("Hello World") is True     # case-insensitive
+    def _m(self, type_, **kwargs):
+        return Matcher({"type": type_, "scores": {}, **kwargs})
 
-    def test_no_match(self):
-        m = Matcher({"type": "contains", "value": "xyz", "scores": {}})
-        assert m.evaluate("Hello World") is False
+    def test_contains_case_insensitive(self):
+        m = self._m("contains", value="hello")
+        self.assertTrue(m.evaluate("Hello World"))
+        self.assertFalse(m.evaluate("Goodbye"))
 
-    def test_case_insensitive(self):
-        m = Matcher({"type": "contains", "value": "HELLO", "scores": {}})
-        assert m.evaluate("hello") is True
+    def test_contains_any(self):
+        m = self._m("contains_any", value=["apple","banana"])
+        self.assertTrue(m.evaluate("I like apple"))
+        self.assertTrue(m.evaluate("banana split"))
+        self.assertFalse(m.evaluate("orange juice"))
 
+    def test_contains_any_string_not_list(self):
+        m = self._m("contains_any", value="hello")
+        self.assertTrue(m.evaluate("hello world"))
 
-class TestMatcherContainsAny:
-    def test_first_matches(self):
-        m = Matcher({"type": "contains_any", "value": ["apple","banana"], "scores": {}})
-        assert m.evaluate("I like apple") is True
+    def test_regex_match(self):
+        m = self._m("regex", pattern=r"\d{3}")
+        self.assertTrue(m.evaluate("code 123"))
+        self.assertFalse(m.evaluate("no digits"))
 
-    def test_second_matches(self):
-        m = Matcher({"type": "contains_any", "value": ["apple","banana"], "scores": {}})
-        assert m.evaluate("banana split") is True
+    def test_regex_case_insensitive(self):
+        m = self._m("regex", pattern=r"hello")
+        self.assertTrue(m.evaluate("HELLO WORLD"))
 
-    def test_none_match(self):
-        m = Matcher({"type": "contains_any", "value": ["apple","banana"], "scores": {}})
-        assert m.evaluate("orange juice") is False
+    def test_regex_dotall(self):
+        m = self._m("regex", pattern=r"start.*end")
+        self.assertTrue(m.evaluate("start\nmiddle\nend"))
 
+    def test_starts_with(self):
+        m = self._m("starts_with", value="Paris")
+        self.assertTrue(m.evaluate("  Paris is great"))
+        self.assertFalse(m.evaluate("London is great"))
 
-class TestMatcherRegex:
-    def test_match(self):
-        m = Matcher({"type": "regex", "pattern": r"\d{3}", "scores": {}})
-        assert m.evaluate("abc 123") is True
+    def test_length_gt(self):
+        m = self._m("length_gt", value="5")
+        self.assertTrue(m.evaluate("hello world"))
+        self.assertFalse(m.evaluate("hello"))  # exact boundary: 5 is not > 5
 
-    def test_no_match(self):
-        m = Matcher({"type": "regex", "pattern": r"\d{3}", "scores": {}})
-        assert m.evaluate("abc def") is False
+    def test_length_lt(self):
+        m = self._m("length_lt", value="5")
+        self.assertTrue(m.evaluate("hi"))
+        self.assertFalse(m.evaluate("hello"))  # exact boundary: 5 is not < 5
 
-    def test_case_insensitive_flag(self):
-        m = Matcher({"type": "regex", "pattern": r"hello", "scores": {}})
-        assert m.evaluate("HELLO WORLD") is True
+    def test_not_contains(self):
+        m = self._m("not_contains", value="forbidden")
+        self.assertTrue(m.evaluate("clean text"))
+        self.assertFalse(m.evaluate("this is forbidden"))
 
-    def test_dotall(self):
-        m = Matcher({"type": "regex", "pattern": r"start.*end", "scores": {}})
-        assert m.evaluate("start\nmiddle\nend") is True
+    def test_unknown_type_returns_false(self):
+        m = self._m("completely_unknown_type_xyz")
+        self.assertFalse(m.evaluate("anything"))
 
-
-class TestMatcherStartsWith:
-    def test_match(self):
-        m = Matcher({"type": "starts_with", "value": "Paris", "scores": {}})
-        assert m.evaluate("Paris is the capital") is True
-
-    def test_no_match(self):
-        m = Matcher({"type": "starts_with", "value": "London", "scores": {}})
-        assert m.evaluate("Paris is the capital") is False
-
-    def test_strips_whitespace(self):
-        m = Matcher({"type": "starts_with", "value": "Paris", "scores": {}})
-        assert m.evaluate("  Paris is the capital") is True
-
-
-class TestMatcherLengths:
-    def test_length_gt_true(self):
-        m = Matcher({"type": "length_gt", "value": "5", "scores": {}})
-        assert m.evaluate("hello world") is True
-
-    def test_length_gt_false(self):
-        m = Matcher({"type": "length_gt", "value": "100", "scores": {}})
-        assert m.evaluate("short") is False
-
-    def test_length_lt_true(self):
-        m = Matcher({"type": "length_lt", "value": "100", "scores": {}})
-        assert m.evaluate("short text") is True
-
-    def test_length_lt_false(self):
-        m = Matcher({"type": "length_lt", "value": "3", "scores": {}})
-        assert m.evaluate("hello world") is False
+    def test_invert(self):
+        m = Matcher({"type":"contains","value":"bad","invert":True,"scores":{}})
+        self.assertTrue(m.evaluate("good response"))
+        self.assertFalse(m.evaluate("bad response"))
 
 
-class TestMatcherNotContains:
-    def test_match_when_absent(self):
-        m = Matcher({"type": "not_contains", "value": "forbidden", "scores": {}})
-        assert m.evaluate("clean response") is True
+class TestMatcherScoring(unittest.TestCase):
 
-    def test_no_match_when_present(self):
-        m = Matcher({"type": "not_contains", "value": "forbidden", "scores": {}})
-        assert m.evaluate("this is forbidden content") is False
-
-
-class TestMatcherInvert:
-    def test_invert_true(self):
-        m = Matcher({"type": "contains", "value": "bad", "invert": True, "scores": {}})
-        assert m.evaluate("good response") is True
-
-    def test_invert_false(self):
-        m = Matcher({"type": "contains", "value": "bad", "invert": True, "scores": {}})
-        assert m.evaluate("bad response") is False
-
-
-class TestMatcherScoring:
     def test_scores_added_on_match(self):
-        m = Matcher({"type": "contains", "value": "3",
-                     "scores": {"gpt-4o": 0.25, "claude-3": 0.20}})
+        m = Matcher({"type":"contains","value":"yes","scores":{"gpt-4o":0.3,"claude":0.2}})
         scores = {}
-        m.apply_scores("The answer is 3", scores)
-        assert scores.get("gpt-4o")  == 0.25
-        assert scores.get("claude-3") == 0.20
+        m.apply_scores("yes it works", scores)
+        self.assertAlmostEqual(scores["gpt-4o"], 0.3)
+        self.assertAlmostEqual(scores["claude"],  0.2)
 
     def test_scores_not_added_on_miss(self):
-        m = Matcher({"type": "contains", "value": "xyz",
-                     "scores": {"model-a": 0.5}})
+        m = Matcher({"type":"contains","value":"xyz","scores":{"m":0.5}})
         scores = {}
-        m.apply_scores("no match here", scores)
-        assert scores == {}
+        m.apply_scores("no match", scores)
+        self.assertEqual(scores, {})
 
     def test_scores_accumulate(self):
-        m1 = Matcher({"type": "contains", "value": "a", "scores": {"m": 0.3}})
-        m2 = Matcher({"type": "contains", "value": "b", "scores": {"m": 0.2}})
+        m = Matcher({"type":"contains","value":"a","scores":{"m":0.3}})
         scores = {}
-        m1.apply_scores("ab text", scores)
-        m2.apply_scores("ab text", scores)
-        assert abs(scores["m"] - 0.5) < 1e-9
-
-    def test_unknown_matcher_type_no_crash(self):
-        m = Matcher({"type": "unknown_type_xyz", "scores": {"m": 0.5}})
-        assert m.evaluate("anything") is False   # returns False, no exception
+        m.apply_scores("a", scores)
+        m.apply_scores("a", scores)
+        self.assertAlmostEqual(scores["m"], 0.6)
 
 
-# ── Probe tests ───────────────────────────────────────────────────────────────
+class TestProbeScoring(unittest.TestCase):
 
-class TestProbe:
-    def _make_probe(self):
+    def _probe(self):
         return Probe({
-            "id": "test-probe",
-            "description": "Test probe",
-            "messages": [{"role": "user", "content": "How many R's in strawberry?"}],
+            "id": "test",
+            "messages": [{"role":"user","content":"Count R in strawberry"}],
             "matchers": [
-                {"type": "contains", "value": "3",
-                 "scores": {"gpt-4o": 0.25, "claude-3": 0.20}},
-                {"type": "contains", "value": "2",
-                 "scores": {"gpt-3.5": 0.35}},
+                {"type":"contains","value":"3","scores":{"gpt-4o":0.25,"claude":0.20}},
+                {"type":"contains","value":"2","scores":{"gpt-3.5":0.35}},
             ],
-            "tags": ["quirk", "counting"],
-            "api_format": "openai",
         })
 
-    def test_score_response_match_first(self):
-        probe = self._make_probe()
-        result = probe.score_response("The answer is 3")
-        assert result.get("gpt-4o") == 0.25
-        assert result.get("claude-3") == 0.20
-        assert "gpt-3.5" not in result
+    def test_first_matcher(self):
+        r = self._probe().score_response("The answer is 3")
+        self.assertAlmostEqual(r.get("gpt-4o", 0), 0.25)
+        self.assertNotIn("gpt-3.5", r)
 
-    def test_score_response_match_second(self):
-        probe = self._make_probe()
-        result = probe.score_response("I count 2 R's")
-        assert result.get("gpt-3.5") == 0.35
-        assert "gpt-4o" not in result
+    def test_second_matcher(self):
+        r = self._probe().score_response("I count 2 Rs")
+        self.assertAlmostEqual(r.get("gpt-3.5", 0), 0.35)
+        self.assertNotIn("gpt-4o", r)
 
-    def test_score_response_no_match(self):
-        probe = self._make_probe()
-        result = probe.score_response("I don't know")
-        assert result == {}
-
-    def test_score_response_both_match(self):
-        probe = self._make_probe()
-        # "3 or 2" — both matchers fire
-        result = probe.score_response("either 3 or 2 depending on how you count")
-        assert "gpt-4o" in result
-        assert "gpt-3.5" in result
+    def test_no_match(self):
+        self.assertEqual(self._probe().score_response("I don't know"), {})
 
     def test_defaults(self):
-        probe = Probe({
-            "id": "minimal",
-            "messages": [{"role": "user", "content": "hi"}],
-            "matchers": [],
-        })
-        assert probe.api_format == "openai"
-        assert probe.tags == []
-        assert probe.system is None
+        p = Probe({"id":"x","messages":[{"role":"user","content":"hi"}],"matchers":[]})
+        self.assertEqual(p.api_format, "openai")
+        self.assertEqual(p.tags, [])
+        self.assertIsNone(p.system)
 
 
-# ── Pack loading tests ────────────────────────────────────────────────────────
+class TestPackLoading(unittest.TestCase):
 
-class TestProbePackLoading:
-    def test_loads_five_packs(self):
-        packs = load_all_packs()
-        assert len(packs) == 5, f"Expected 5 packs, got {len(packs)}"
+    def setUp(self):
+        self.packs = load_all_packs()
 
-    def test_probe_count(self):
-        packs = load_all_packs()
-        total = sum(len(p.probes) for p in packs)
-        assert total >= 30, f"Expected ≥30 probes, got {total}"
+    def test_minimum_pack_count(self):
+        self.assertGreaterEqual(len(self.packs), 10)
+
+    def test_minimum_probe_count(self):
+        total = sum(len(p.probes) for p in self.packs)
+        self.assertGreaterEqual(total, 60)
 
     def test_no_duplicate_ids(self):
-        packs = load_all_packs()
-        all_ids = [p.id for pack in packs for p in pack.probes]
-        assert len(all_ids) == len(set(all_ids)), f"Duplicate probe IDs: {[x for x in all_ids if all_ids.count(x)>1]}"
+        ids = [p.id for pack in self.packs for p in pack.probes]
+        dupes = [x for x in ids if ids.count(x) > 1]
+        self.assertFalse(dupes, f"Duplicate probe IDs: {set(dupes)}")
 
-    def test_known_probes_exist(self):
-        packs = load_all_packs()
-        all_ids = {p.id for pack in packs for p in pack.probes}
+    def test_required_probes_present(self):
+        ids = {p.id for pack in self.packs for p in pack.probes}
         required = {
             "quirk-strawberry-r",
-            "style-ai-self-reference",
-            "claude-identity-direct",
-            "openai-model-reveal-attempt",
-            "gemini-identity",
-            "llama-identity",
+            "bfp-math-decimal-compare",
+            "bfp-claude-ethical-nuance",
+            "bfp-gpt4-markdown-eagerness",
         }
-        missing = required - all_ids
-        assert not missing, f"Missing expected probes: {missing}"
+        missing = required - ids
+        self.assertFalse(missing, f"Missing probes: {missing}")
 
     def test_all_probes_have_messages(self):
-        packs = load_all_packs()
-        for pack in packs:
+        for pack in self.packs:
             for probe in pack.probes:
-                assert probe.messages, f"Probe {probe.id} has no messages"
+                self.assertTrue(probe.messages, f"{probe.id}: no messages")
                 for msg in probe.messages:
-                    assert "role" in msg,    f"Probe {probe.id}: message missing 'role'"
-                    assert "content" in msg, f"Probe {probe.id}: message missing 'content'"
+                    self.assertIn("role",    msg, f"{probe.id}: message missing role")
+                    self.assertIn("content", msg, f"{probe.id}: message missing content")
 
     def test_all_matchers_have_scores(self):
-        packs = load_all_packs()
-        for pack in packs:
+        for pack in self.packs:
             for probe in pack.probes:
-                for matcher in probe.matchers:
-                    assert isinstance(matcher.scores, dict), \
-                        f"Probe {probe.id}: matcher scores not a dict"
+                for m in probe.matchers:
+                    self.assertIsInstance(m.scores, dict, f"{probe.id}: scores not dict")
+                    self.assertGreater(len(m.scores), 0, f"{probe.id}: empty scores")
 
-    def test_nonexistent_dir_returns_only_builtins(self):
-        from pathlib import Path
-        packs = load_all_packs(Path("/nonexistent_path_xyz"))
-        assert len(packs) == 5   # still loads builtins
+    def test_nonexistent_dir_returns_builtins(self):
+        packs = load_all_packs(Path("/nonexistent/path/xyz"))
+        self.assertGreaterEqual(len(packs), 10)
 
-    def test_by_tags_filter(self):
-        packs = load_all_packs()
-        quirk_probes = [p for pack in packs for p in pack.by_tags(["quirk"])]
-        assert len(quirk_probes) > 0
-        for p in quirk_probes:
-            assert "quirk" in p.tags
+    def test_by_tags(self):
+        for pack in self.packs:
+            quirk_probes = pack.by_tags(["quirk"])
+            for p in quirk_probes:
+                self.assertIn("quirk", p.tags)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

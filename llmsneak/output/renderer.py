@@ -453,3 +453,59 @@ def print_mcp(result) -> None:
         for ev in result.evidence[:6]:
             console.print(f"    [dim]○[/]  {ev}")
     console.print()
+
+
+# ── Phase 0.5 — Port Scan output ──────────────────────────────────────────────
+
+def print_port_scan(result) -> None:
+    """Print PortScanResult — LLM port discovery."""
+    from llmsneak.models import PortResult
+
+    total = len(result.open_llm_ports) + len(result.open_ports)
+
+    if not total:
+        console.print("  [red]✗[/]  No open ports found\n")
+        return
+
+    console.print("[bold cyan]PORT SCAN RESULTS[/]")
+    console.print(
+        f"  Scanned [cyan]{result.ports_scanned}[/] known LLM ports on "
+        f"[bold]{result.host}[/] in [dim]{result.duration_ms:.0f}ms[/]\n"
+    )
+
+    # Header
+    console.print(
+        f"  {'PORT':<8}{'STATE':<14}{'SERVICE':<26}{'API FORMAT':<14}LATENCY"
+    )
+    console.print("  " + "─" * 70)
+
+    def _row(pr: PortResult) -> None:
+        color  = pr.state_color()
+        state  = pr.state.upper()
+        svc    = pr.service[:24] if pr.service else "unknown"
+        fmt    = pr.api_format[:12] if pr.api_format else ""
+        lat    = f"{pr.latency_ms:.0f}ms" if pr.latency_ms else ""
+        llm_badge = "  [bold green]★ LLM[/]" if pr.is_llm else ""
+        console.print(
+            f"  [{color}]{pr.port:<8}{state:<14}[/]"
+            f"{svc:<26}{fmt:<14}[dim]{lat}[/]{llm_badge}"
+        )
+        for ev in pr.evidence[:2]:
+            console.print(f"  [dim]   └─ {ev}[/]")
+
+    for pr in result.open_llm_ports:
+        _row(pr)
+    for pr in result.open_ports:
+        _row(pr)
+
+    console.print()
+    if result.open_llm_ports:
+        console.print(
+            f"  [bold green]✓[/]  {len(result.open_llm_ports)} LLM service(s) discovered"
+        )
+    if result.open_ports:
+        console.print(
+            f"  [yellow]○[/]  {len(result.open_ports)} open port(s) — not confirmed LLM"
+        )
+    console.print()
+

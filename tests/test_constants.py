@@ -1,123 +1,113 @@
-"""
-Tests for llmsneak.constants — validates data integrity of all lookup tables.
-"""
-import sys
+"""Tests for llmsneak.constants — run with pytest OR python3 -m unittest"""
+import sys, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from llmsneak.constants import (
     KNOWN_ENDPOINTS, PROVIDER_HEADER_SIGNATURES,
-    PROVIDER_BODY_SIGNATURES, MODEL_PATTERNS,
-    TIMING_TEMPLATES, STATUS_STATE_MAP,
-    TIMING_NAMES, VERSION,
+    STATUS_STATE_MAP, TIMING_TEMPLATES, TIMING_NAMES, VERSION,
 )
 
 
-class TestEndpoints:
+class TestEndpoints(unittest.TestCase):
+
     def test_minimum_count(self):
-        assert len(KNOWN_ENDPOINTS) >= 20
+        self.assertGreaterEqual(len(KNOWN_ENDPOINTS), 30)
 
-    def test_all_tuples(self):
-        for item in KNOWN_ENDPOINTS:
-            assert isinstance(item, tuple) and len(item) == 2, f"Bad entry: {item}"
+    def test_all_paths_start_with_slash(self):
+        bad = [p for p,_ in KNOWN_ENDPOINTS if not p.startswith("/")]
+        self.assertFalse(bad, f"Paths without leading /: {bad}")
 
-    def test_paths_start_with_slash(self):
-        for path, svc in KNOWN_ENDPOINTS:
-            assert path.startswith("/"), f"Path '{path}' doesn't start with /"
-
-    def test_service_labels_non_empty(self):
-        for path, svc in KNOWN_ENDPOINTS:
-            assert svc, f"Empty service label for {path}"
+    def test_no_empty_service_labels(self):
+        bad = [(p,s) for p,s in KNOWN_ENDPOINTS if not s.strip()]
+        self.assertFalse(bad, f"Empty service labels: {bad}")
 
     def test_critical_paths_present(self):
-        paths = {p for p, _ in KNOWN_ENDPOINTS}
-        for required in ["/v1/chat/completions", "/v1/messages", "/api/chat", "/api/tags"]:
-            assert required in paths, f"Missing critical path: {required}"
+        paths = {p for p,_ in KNOWN_ENDPOINTS}
+        for required in ["/v1/chat/completions","/v1/messages","/api/chat","/api/tags","/mcp"]:
+            self.assertIn(required, paths, f"Missing: {required}")
 
 
-class TestProviderHeaderSigs:
-    def test_has_key_providers(self):
-        for provider in ["openai", "anthropic", "google", "azure", "ollama"]:
-            assert provider in PROVIDER_HEADER_SIGNATURES, f"Missing: {provider}"
+class TestStatusStateMap(unittest.TestCase):
 
-    def test_sig_format(self):
-        for provider, sigs in PROVIDER_HEADER_SIGNATURES.items():
-            assert isinstance(sigs, list), f"{provider}: sigs not a list"
-            for entry in sigs:
-                assert isinstance(entry, tuple) and len(entry) == 2, \
-                    f"{provider}: bad sig entry {entry}"
-                header_name, pattern = entry
-                assert isinstance(header_name, str), f"{provider}: header name not str"
-                assert pattern is None or isinstance(pattern, str), \
-                    f"{provider}: pattern must be str or None"
+    def test_200_open(self):
+        self.assertEqual(STATUS_STATE_MAP[200], "open")
 
+    def test_400_open(self):
+        """Bad Request → endpoint exists, needs correct body."""
+        self.assertEqual(STATUS_STATE_MAP[400], "open")
 
-class TestStatusStateMap:
-    def test_200_is_open(self):
-        assert STATUS_STATE_MAP[200] == "open"
+    def test_401_filtered(self):
+        """Unauthorized → endpoint exists, needs auth."""
+        self.assertEqual(STATUS_STATE_MAP[401], "filtered")
 
-    def test_401_is_filtered(self):
-        assert STATUS_STATE_MAP[401] == "filtered"
-        # 401 means endpoint EXISTS but requires auth
+    def test_403_filtered(self):
+        self.assertEqual(STATUS_STATE_MAP[403], "filtered")
 
-    def test_429_is_filtered(self):
-        assert STATUS_STATE_MAP[429] == "filtered"
-        # Rate-limited = endpoint exists!
+    def test_429_filtered(self):
+        """Rate limited → endpoint exists."""
+        self.assertEqual(STATUS_STATE_MAP[429], "filtered")
 
-    def test_valid_states(self):
+    def test_500_open(self):
+        """Server error → endpoint exists."""
+        self.assertEqual(STATUS_STATE_MAP[500], "open")
+
+    def test_all_values_valid(self):
         valid = {"open", "filtered", "closed"}
         for code, state in STATUS_STATE_MAP.items():
-            assert state in valid, f"HTTP {code} → invalid state '{state}'"
-
-    def test_400_is_open(self):
-        assert STATUS_STATE_MAP[400] == "open"
-        # Bad request = endpoint exists, just needs correct body
+            self.assertIn(state, valid, f"HTTP {code} → invalid state '{state}'")
 
 
-class TestTimingTemplates:
-    def test_all_levels_present(self):
+class TestTimingTemplates(unittest.TestCase):
+
+    def test_all_six_levels_present(self):
         for level in range(6):
-            assert level in TIMING_TEMPLATES
+            self.assertIn(level, TIMING_TEMPLATES)
 
-    def test_tuple_format(self):
+    def test_fields_are_positive_ints(self):
         for level, (concurrent, delay, timeout) in TIMING_TEMPLATES.items():
-            assert isinstance(concurrent, int) and concurrent >= 1
-            assert isinstance(delay,      int) and delay      >= 0
-            assert isinstance(timeout,    int) and timeout    >= 1
+            self.assertGreaterEqual(concurrent, 1)
+            self.assertGreaterEqual(delay,      0)
+            self.assertGreaterEqual(timeout,    1)
 
-    def test_increasing_concurrency(self):
-        # Higher T level = more concurrent requests
-        levels = sorted(TIMING_TEMPLATES.keys())
-        concurrencies = [TIMING_TEMPLATES[l][0] for l in levels]
-        assert concurrencies == sorted(concurrencies), \
-            f"Concurrency should increase with level: {concurrencies}"
+    def test_concurrency_increases(self):
+        vals = [TIMING_TEMPLATES[l][0] for l in range(6)]
+        self.assertEqual(vals, sorted(vals))
 
-    def test_decreasing_delay(self):
-        levels = sorted(TIMING_TEMPLATES.keys())
-        delays = [TIMING_TEMPLATES[l][1] for l in levels]
-        assert delays == sorted(delays, reverse=True), \
-            f"Delay should decrease with level: {delays}"
+    def test_delay_decreases(self):
+        vals = [TIMING_TEMPLATES[l][1] for l in range(6)]
+        self.assertEqual(vals, sorted(vals, reverse=True))
 
-    def test_timing_names_match(self):
-        for level in range(6):
-            assert level in TIMING_NAMES
-            assert isinstance(TIMING_NAMES[level], str)
-        assert TIMING_NAMES[3] == "normal"   # default
-        assert TIMING_NAMES[0] == "paranoid"
-        assert TIMING_NAMES[5] == "insane"
+    def test_names_correct(self):
+        self.assertEqual(TIMING_NAMES[0], "paranoid")
+        self.assertEqual(TIMING_NAMES[3], "normal")
+        self.assertEqual(TIMING_NAMES[5], "insane")
 
 
-class TestModelPatterns:
-    def test_key_models_present(self):
-        for model in ["gpt-4o", "claude-3-opus", "gemini-1.5-pro", "llama-3.x", "mistral-7b"]:
-            assert model in MODEL_PATTERNS, f"Missing model pattern: {model}"
+class TestProviderSignatures(unittest.TestCase):
 
-    def test_patterns_are_lists(self):
-        for model, patterns in MODEL_PATTERNS.items():
-            assert isinstance(patterns, list) and len(patterns) > 0, \
-                f"{model}: empty patterns list"
+    def test_required_providers_present(self):
+        for p in ["openai","anthropic","google","azure","ollama"]:
+            self.assertIn(p, PROVIDER_HEADER_SIGNATURES)
 
-    def test_version_string(self):
-        assert isinstance(VERSION, str)
+    def test_signature_format(self):
+        for provider, sigs in PROVIDER_HEADER_SIGNATURES.items():
+            self.assertIsInstance(sigs, list)
+            for entry in sigs:
+                self.assertEqual(len(entry), 2)
+                header_name, pattern = entry
+                self.assertIsInstance(header_name, str)
+                self.assertTrue(pattern is None or isinstance(pattern, str))
+
+
+class TestVersion(unittest.TestCase):
+
+    def test_semver_format(self):
         parts = VERSION.split(".")
-        assert len(parts) == 3, f"Version '{VERSION}' should be semver X.Y.Z"
+        self.assertEqual(len(parts), 3, f"Version '{VERSION}' should be X.Y.Z")
+        for part in parts:
+            self.assertTrue(part.isdigit(), f"Part '{part}' not numeric")
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

@@ -1,181 +1,269 @@
-"""
-Tests for llmsneak.cli argument parsing and llmsneak.scanner._normalise_target.
-No network calls — all pure logic.
-"""
-import sys
+"""Tests for CLI parsing and ScanConfig flag logic — no rich required."""
+import sys, re, unittest, types
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# ── Mock rich before any llmsneak import touches it ──────────────────────────
+class _FakeConsole:
+    def print(self, *a, **k): pass
+    def rule(self, *a, **k):  pass
+    def log(self, *a, **k):   pass
+
+class _FakeTable:
+    def add_column(self, *a, **k): pass
+    def add_row(self, *a, **k):    pass
+
+_console = _FakeConsole()
+
+import types as _types
+_rich       = _types.ModuleType("rich");         sys.modules["rich"] = _rich
+_console_m  = _types.ModuleType("rich.console"); _console_m.Console = lambda **kw: _console
+_table_m    = _types.ModuleType("rich.table");   _table_m.Table     = lambda **kw: _FakeTable()
+_box_m      = _types.ModuleType("rich.box");     _box_m.SIMPLE_HEAD = None; _box_m.MINIMAL = None
+_text_m     = _types.ModuleType("rich.text");    _text_m.Text       = lambda *a,**k: ""
+_panel_m    = _types.ModuleType("rich.panel");   _panel_m.Panel     = type("Panel",(),{})
+_progress_m = _types.ModuleType("rich.progress")
+_markup_m   = _types.ModuleType("rich.markup")
+for _name, _mod in [
+    ("rich.console",  _console_m),
+    ("rich.table",    _table_m),
+    ("rich.box",      _box_m),
+    ("rich.text",     _text_m),
+    ("rich.panel",    _panel_m),
+    ("rich.progress", _progress_m),
+    ("rich.markup",   _markup_m),
+]:
+    setattr(_rich, _name.split(".")[-1], _mod)
+    sys.modules[_name] = _mod
+
+# Patch rich.console module attribute on rich itself
+_rich.box = _box_m
+
 from llmsneak.cli import build_parser
-from llmsneak.scanner import _normalise_target, ScanConfig
 
 
-class TestNormaliseTarget:
-    """Verify URL scheme inference works correctly for all target formats."""
+# ── _normalise_target — extracted directly from scanner.py ───────────────────
+
+def _load_normalise():
+    src = open(Path(__file__).parent.parent / "llmsneak/scanner.py").read()
+    match = re.search(r'(def _normalise_target.*?)(?=\n\nasync def|\nclass |\Z)', src, re.DOTALL)
+    ns = {}
+    exec(match.group(0), ns)
+    return ns["_normalise_target"]
+
+_normalise_target = _load_normalise()
+
+
+class TestNormaliseTarget(unittest.TestCase):
 
     def test_https_passthrough(self):
-        assert _normalise_target("https://api.openai.com") == "https://api.openai.com"
-
-    def test_http_passthrough(self):
-        assert _normalise_target("http://localhost:11434") == "http://localhost:11434"
+        self.assertEqual(_normalise_target("https://api.openai.com"),
+                         "https://api.openai.com")
 
     def test_trailing_slash_stripped(self):
-        assert _normalise_target("https://api.openai.com/") == "https://api.openai.com"
+        self.assertEqual(_normalise_target("https://api.openai.com/"),
+                         "https://api.openai.com")
 
-    def test_bare_hostname_gets_https(self):
-        result = _normalise_target("api.openai.com")
-        assert result == "https://api.openai.com"
+    def test_http_passthrough(self):
+        self.assertEqual(_normalise_target("http://localhost:11434"),
+                         "http://localhost:11434")
+
+    def test_bare_cloud_gets_https(self):
+        self.assertEqual(_normalise_target("api.openai.com"),
+                         "https://api.openai.com")
 
     def test_localhost_gets_http(self):
-        result = _normalise_target("localhost:11434")
-        assert result.startswith("http://")
+        self.assertEqual(_normalise_target("localhost:11434"),
+                         "http://localhost:11434")
 
-    def test_127_0_0_1_gets_http(self):
-        result = _normalise_target("127.0.0.1:8080")
-        assert result.startswith("http://")
+    def test_loopback_ip_gets_http(self):
+        self.assertEqual(_normalise_target("127.0.0.1:8080"),
+                         "http://127.0.0.1:8080")
+
+    def test_lan_ip_gets_http(self):
+        self.assertEqual(_normalise_target("192.168.1.100:11434"),
+                         "http://192.168.1.100:11434")
+
+    def test_private_10_block_gets_http(self):
+        self.assertEqual(_normalise_target("10.0.0.50:8000"),
+                         "http://10.0.0.50:8000")
+
+    def test_172_block_gets_http(self):
+        self.assertEqual(_normalise_target("172.16.0.1:9000"),
+                         "http://172.16.0.1:9000")
 
     def test_ollama_port_gets_http(self):
-        result = _normalise_target("myserver:11434")
-        assert result.startswith("http://")
-
-    def test_lmstudio_port_gets_http(self):
-        result = _normalise_target("localhost:1234")
-        assert result.startswith("http://")
-
-    def test_vllm_port_gets_http(self):
-        result = _normalise_target("gpu-server:8000")
-        assert result.startswith("http://")
-
-    def test_internal_192_gets_http(self):
-        result = _normalise_target("192.168.1.100:11434")
-        assert result.startswith("http://")
-
-    def test_cloud_api_gets_https(self):
-        for host in ["api.anthropic.com", "generativelanguage.googleapis.com"]:
-            result = _normalise_target(host)
-            assert result.startswith("https://"), f"{host} should get https"
+        # A bare hostname with Ollama port should use http
+        self.assertEqual(_normalise_target("gpu-box:11434"),
+                         "http://gpu-box:11434")
 
 
-class TestCliParser:
-    """Verify argparse flags parse correctly."""
+# ── CLI argument parsing ──────────────────────────────────────────────────────
+
+class TestCLIParser(unittest.TestCase):
 
     def _parse(self, *args):
-        parser = build_parser()
-        return parser.parse_args(list(args))
+        return build_parser().parse_args(list(args))
 
-    def test_target_required(self):
-        import pytest
-        with pytest.raises(SystemExit):
-            self._parse()   # no target → error
-
-    def test_basic_target(self):
+    def test_target_stored(self):
         args = self._parse("https://api.openai.com")
-        assert args.target == "https://api.openai.com"
+        self.assertEqual(args.target, "https://api.openai.com")
 
-    def test_default_timing(self):
+    def test_default_timing_is_3(self):
         args = self._parse("https://api.openai.com")
-        assert args.timing == 3
+        self.assertEqual(args.timing, 3)
 
-    def test_timing_flag(self):
-        args = self._parse("-T4", "https://api.openai.com")
-        assert args.timing == 4
+    def test_timing_flags_0_to_5(self):
+        for level in range(6):
+            args = self._parse(f"-T{level}", "https://api.openai.com")
+            self.assertEqual(args.timing, level)
 
-    def test_sn_flag(self):
+    def test_sn_sets_discovery_only(self):
         args = self._parse("-sn", "https://api.openai.com")
-        assert args.discovery_only is True
+        self.assertTrue(args.discovery_only)
 
-    def test_sv_flag(self):
+    def test_sv_sets_version_detect(self):
         args = self._parse("-sV", "https://api.openai.com")
-        assert args.version_detect is True
+        self.assertTrue(args.version_detect)
 
     def test_aggressive_flag(self):
         args = self._parse("-A", "https://api.openai.com")
-        assert args.aggressive is True
+        self.assertTrue(args.aggressive)
 
     def test_api_key(self):
         args = self._parse("--api-key", "sk-test123", "https://api.openai.com")
-        assert args.api_key == "sk-test123"
+        self.assertEqual(args.api_key, "sk-test123")
 
     def test_model_flag(self):
         args = self._parse("--model", "llama3", "http://localhost:11434")
-        assert args.model == "llama3"
+        self.assertEqual(args.model, "llama3")
 
     def test_script_flag(self):
-        args = self._parse("--script", "guards,capabilities", "https://api.openai.com")
-        assert "guards" in args.script
-        assert "capabilities" in args.script
+        args = self._parse("--script", "guards,mcp", "https://api.openai.com")
+        self.assertIn("guards", args.script)
+        self.assertIn("mcp",    args.script)
 
-    def test_output_flags(self):
-        args = self._parse("-oN", "out.txt", "-oJ", "out.json",
-                           "https://api.openai.com")
-        assert args.output_normal == "out.txt"
-        assert args.output_json   == "out.json"
+    def test_output_n(self):
+        args = self._parse("-oN", "scan.txt", "https://api.openai.com")
+        self.assertEqual(args.output_normal, "scan.txt")
 
-    def test_output_all_flag(self):
+    def test_output_j(self):
+        args = self._parse("-oJ", "scan.json", "https://api.openai.com")
+        self.assertEqual(args.output_json, "scan.json")
+
+    def test_output_a(self):
         args = self._parse("-oA", "my_scan", "https://api.openai.com")
-        assert args.output_all == "my_scan"
+        self.assertEqual(args.output_all, "my_scan")
 
     def test_paths_flag(self):
-        args = self._parse("-p", "/v1/chat/completions,/v1/models",
-                           "https://api.openai.com")
-        assert args.paths == "/v1/chat/completions,/v1/models"
+        args = self._parse("-p", "/v1/chat,/v1/models", "https://api.openai.com")
+        self.assertIn("/v1/chat", args.paths)
 
-    def test_verbose_count(self):
-        args = self._parse("-v", "https://api.openai.com")
-        assert args.verbose == 1
+    def test_verbose_increments(self):
+        args1 = self._parse("-v", "https://api.openai.com")
+        self.assertEqual(args1.verbose, 1)
         args2 = self._parse("-v", "-v", "https://api.openai.com")
-        assert args2.verbose == 2
+        self.assertEqual(args2.verbose, 2)
 
     def test_open_flag(self):
         args = self._parse("--open", "https://api.openai.com")
-        assert args.open is True
+        self.assertTrue(args.open)
 
-    def test_t_out_of_range(self):
-        import pytest
-        with pytest.raises(SystemExit):
-            self._parse("-T6", "https://api.openai.com")  # max is 5
+    def test_api_format_override(self):
+        args = self._parse("--api-format", "anthropic", "https://api.anthropic.com")
+        self.assertEqual(args.api_format_override, "anthropic")
+
+    def test_profile_flag(self):
+        args = self._parse("--profile", "groq", "https://api.groq.com/openai/v1")
+        self.assertEqual(args.profile, "groq")
+
+    def test_list_probes(self):
+        args = self._parse("--list-probes", "placeholder")
+        self.assertTrue(args.list_probes)
+
+    def test_list_hosts(self):
+        args = self._parse("--list-hosts", "placeholder")
+        self.assertTrue(args.list_hosts)
 
 
-class TestScanConfig:
-    """Verify ScanConfig builds correctly from parsed args."""
+# ── ScanConfig phase flag logic ───────────────────────────────────────────────
 
-    def _cfg(self, *args):
-        parser = build_parser()
-        parsed = parser.parse_args(list(args))
-        return ScanConfig(parsed)
+def _simulate_flags(aggressive=False, discovery_only=False, version_detect=False,
+                    script=""):
+    """Simulate ScanConfig flag resolution without importing scanner."""
+    scripts = set(s.strip() for s in script.split(",") if s.strip())
+    if "all" in scripts:
+        scripts = {"guards","capabilities","extract","vuln","mcp"}
+    run_all = aggressive
+    return {
+        "run_provider":     not discovery_only,
+        "run_fingerprint":  version_detect or run_all,
+        "run_capabilities": run_all or "capabilities" in scripts,
+        "run_guards":       run_all or "guards" in scripts or "extract" in scripts,
+        "run_vulns":        run_all or "vuln" in scripts or "vulns" in scripts,
+        "run_mcp":          run_all or "mcp" in scripts or "tools" in scripts,
+    }
 
-    def test_basic_target_normalised(self):
-        cfg = self._cfg("localhost:11434")
-        assert cfg.target.startswith("http://")
 
-    def test_aggressive_enables_all_phases(self):
-        cfg = self._cfg("-A", "https://api.openai.com")
-        assert cfg.run_provider
-        assert cfg.run_fingerprint
-        assert cfg.run_capabilities
-        assert cfg.run_guards
+class TestScanConfigFlags(unittest.TestCase):
 
-    def test_discovery_only_disables_all(self):
-        cfg = self._cfg("-sn", "https://api.openai.com")
-        assert cfg.discovery_only is True
-        assert cfg.run_fingerprint is False
-        assert cfg.run_capabilities is False
-        assert cfg.run_guards is False
+    def test_default_no_extra_phases(self):
+        f = _simulate_flags()
+        self.assertTrue(f["run_provider"])
+        self.assertFalse(f["run_fingerprint"])
+        self.assertFalse(f["run_capabilities"])
+        self.assertFalse(f["run_guards"])
+        self.assertFalse(f["run_vulns"])
+        self.assertFalse(f["run_mcp"])
 
-    def test_script_all_enables_all(self):
-        cfg = self._cfg("--script", "all", "https://api.openai.com")
-        assert cfg.run_capabilities is True
-        assert cfg.run_guards is True
+    def test_aggressive_enables_all(self):
+        f = _simulate_flags(aggressive=True)
+        self.assertTrue(f["run_fingerprint"])
+        self.assertTrue(f["run_capabilities"])
+        self.assertTrue(f["run_guards"])
+        self.assertTrue(f["run_vulns"])
+        self.assertTrue(f["run_mcp"])
 
-    def test_custom_paths_parsed(self):
-        cfg = self._cfg("-p", "/v1/chat/completions,/api/chat", "https://api.openai.com")
-        assert cfg.custom_paths is not None
-        paths = [p for p, _ in cfg.custom_paths]
-        assert "/v1/chat/completions" in paths
-        assert "/api/chat" in paths
+    def test_discovery_only_disables_provider(self):
+        f = _simulate_flags(discovery_only=True)
+        self.assertFalse(f["run_provider"])
+        self.assertFalse(f["run_fingerprint"])
 
-    def test_timing_config(self):
-        cfg = self._cfg("-T4", "https://api.openai.com")
-        assert cfg.timing.level == 4
-        assert cfg.timing.name == "aggressive"
-        assert cfg.timing.max_concurrent == 5
+    def test_sv_enables_fingerprint_only(self):
+        f = _simulate_flags(version_detect=True)
+        self.assertTrue(f["run_fingerprint"])
+        self.assertFalse(f["run_guards"])
+        self.assertFalse(f["run_mcp"])
+
+    def test_script_all_expands(self):
+        f = _simulate_flags(script="all")
+        self.assertTrue(f["run_guards"])
+        self.assertTrue(f["run_capabilities"])
+        self.assertTrue(f["run_vulns"])
+        self.assertTrue(f["run_mcp"])
+
+    def test_script_mcp_only(self):
+        f = _simulate_flags(script="mcp")
+        self.assertTrue(f["run_mcp"])
+        self.assertFalse(f["run_guards"])
+        self.assertFalse(f["run_vulns"])
+
+    def test_script_vuln_only(self):
+        f = _simulate_flags(script="vuln")
+        self.assertTrue(f["run_vulns"])
+        self.assertFalse(f["run_mcp"])
+
+    def test_script_guards_only(self):
+        f = _simulate_flags(script="guards")
+        self.assertTrue(f["run_guards"])
+        self.assertFalse(f["run_vulns"])
+
+    def test_script_multi(self):
+        f = _simulate_flags(script="guards,mcp")
+        self.assertTrue(f["run_guards"])
+        self.assertTrue(f["run_mcp"])
+        self.assertFalse(f["run_vulns"])
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

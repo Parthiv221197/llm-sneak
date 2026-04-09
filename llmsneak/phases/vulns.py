@@ -319,14 +319,21 @@ async def scan_vulnerabilities(
     aggressive:  bool = False,
 ) -> VulnScanResult:
     """
-    Run all vulnerability probes. Returns a VulnScanResult with findings.
-    Maps to `--script vuln` in Nmap.
+    Run OWASP LLM Top 10 quick-screen probes.
+
+    NOTE: This is a lightweight first-pass screen, not a comprehensive
+    assessment. It covers 5 of the 10 OWASP LLM categories with 18 probes.
+    For deep vulnerability analysis use Garak (github.com/leondz/garak).
+
+    Works without an API key when the chat endpoint is openly accessible
+    (which is itself a HIGH finding from Phase 0).
     """
     result = VulnScanResult()
 
     if not api_key:
-        result.errors.append("No API key — vulnerability scan requires --api-key")
-        return result
+        # Still try — the endpoint might be open (Phase 0 will have flagged this)
+        # We send without auth; if we get 401s back, we skip gracefully
+        pass
 
     target_model = model or _default_model(api_format)
     sem = asyncio.Semaphore(timing.max_concurrent)
